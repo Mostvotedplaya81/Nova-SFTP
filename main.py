@@ -1,5 +1,9 @@
 import sys
 import os
+import re
+import stat
+import json
+import time
 import subprocess
 import importlib.util
 
@@ -18,63 +22,123 @@ def ensure_dependencies():
 
 ensure_dependencies()
 
-import json
-import stat
 import keyring
 import paramiko
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTreeView, QSplitter, QTableView, QLabel, QLineEdit, QPushButton, 
-    QMessageBox, QMenu, QProgressBar, QHeaderView, QDialog, QListWidget, 
-    QFormLayout, QInputDialog, QTextEdit, QStyle, QFileDialog, QToolButton, 
-    QTabWidget, QCheckBox, QPlainTextEdit
+    QTreeView, QSplitter, QTableView, QLabel, QLineEdit, QPushButton,
+    QMessageBox, QMenu, QProgressBar, QHeaderView, QDialog, QListWidget,
+    QFormLayout, QInputDialog, QTextEdit, QStyle, QFileDialog, QToolButton,
+    QTabWidget, QCheckBox, QPlainTextEdit, QComboBox
 )
 from PyQt6.QtGui import (
     QFileSystemModel, QStandardItemModel, QStandardItem, QIntValidator, QIcon,
     QPainter, QColor, QTextFormat, QFont, QTextCursor, QSyntaxHighlighter, QTextCharFormat
 )
-from PyQt6.QtCore import QDir, Qt, QThread, pyqtSignal, QSortFilterProxyModel, QRect, QSize, QRegularExpression
+from PyQt6.QtCore import (
+    QDir, Qt, QThread, pyqtSignal, QSortFilterProxyModel, QRect, QSize, QRegularExpression
+)
 
 PREMIUM_THEME = """
-QWidget { background-color: #18181b; color: #e4e4e7; font-family: "Segoe UI", "Ubuntu", sans-serif; font-size: 13px; }
-QTreeView, QTableView, QListWidget { background-color: #09090b; border: 1px solid #27272a; border-radius: 4px; alternate-background-color: #18181b; }
-QHeaderView::section { background-color: #18181b; color: #a1a1aa; padding: 8px; border: none; border-right: 1px solid #27272a; border-bottom: 1px solid #27272a; font-weight: 600; }
-QTreeView::item:selected, QTableView::item:selected, QListWidget::item:selected { background-color: #2563eb; color: white; }
+QWidget {
+    background-color: #18181b;
+    color: #e4e4e7;
+    font-family: "Segoe UI", "Ubuntu", sans-serif;
+    font-size: 13px;
+}
+QTreeView, QTableView, QListWidget, QPlainTextEdit {
+    background-color: #09090b;
+    border: 1px solid #27272a;
+    border-radius: 4px;
+    alternate-background-color: #18181b;
+}
+QHeaderView::section {
+    background-color: #18181b;
+    color: #a1a1aa;
+    padding: 8px;
+    border: none;
+    border-right: 1px solid #27272a;
+    border-bottom: 1px solid #27272a;
+    font-weight: 600;
+}
+QTreeView::item:selected, QTableView::item:selected, QListWidget::item:selected {
+    background-color: #2563eb;
+    color: white;
+}
 QTreeView::item { padding: 4px; }
-QLineEdit, QTextEdit { background-color: #09090b; border: 1px solid #3f3f46; padding: 6px 10px; border-radius: 4px; }
-QLineEdit:focus, QTextEdit:focus { border: 1px solid #3b82f6; }
-QPushButton { background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-weight: 600; }
+QLineEdit, QTextEdit, QComboBox {
+    background-color: #09090b;
+    border: 1px solid #3f3f46;
+    padding: 6px 10px;
+    border-radius: 4px;
+    color: #f4f4f5;
+}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border: 1px solid #3b82f6; }
+QPushButton {
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-weight: 600;
+}
 QPushButton:hover { background-color: #3b82f6; }
 QPushButton:disabled { background-color: #27272a; color: #71717a; }
 
-/* Navigation buttons (Back, Up, Home) */
 QToolButton.nav-btn {
     background-color: #27272a;
     color: #e4e4e7;
     border: 1px solid #3f3f46;
     border-radius: 4px;
-    padding: 3px;
-    min-width: 28px;
-    max-width: 28px;
-    min-height: 26px;
-    max-height: 26px;
-    font-size: 12px;
-    font-weight: bold;
+    padding: 4px;
+    min-width: 32px;
+    max-width: 32px;
+    min-height: 30px;
+    max-height: 30px;
 }
-QToolButton.nav-btn:hover { background-color: #3f3f46; color: #ffffff; }
-QToolButton.nav-btn:disabled { background-color: #18181b; color: #52525b; border-color: #27272a; }
+QToolButton.nav-btn:hover { background-color: #3f3f46; color: #ffffff; border-color: #52525b; }
+QToolButton.nav-btn:disabled { background-color: #18181b; border-color: #27272a; }
 
 QMenu { background-color: #18181b; border: 1px solid #27272a; border-radius: 4px; padding: 4px; }
 QMenu::item { padding: 6px 24px; border-radius: 2px; }
 QMenu::item:selected { background-color: #2563eb; }
-QProgressBar { border: 1px solid #27272a; border-radius: 2px; text-align: center; color: white; background-color: #09090b; }
+
+QProgressBar {
+    border: 1px solid #27272a;
+    border-radius: 2px;
+    text-align: center;
+    color: white;
+    background-color: #09090b;
+}
 QProgressBar::chunk { background-color: #10b981; }
+
 QMessageBox, QDialog { background-color: #18181b; }
+QMessageBox QLabel {
+    color: #f4f4f5;
+    min-width: 350px;
+    min-height: 60px;
+    font-size: 13px;
+}
+
 QTabWidget::pane { border: 1px solid #27272a; border-radius: 4px; }
-QTabBar::tab { background: #18181b; color: #a1a1aa; padding: 8px 16px; border: 1px solid #27272a; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+QTabBar::tab {
+    background: #18181b;
+    color: #a1a1aa;
+    padding: 8px 16px;
+    border: 1px solid #27272a;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
 QTabBar::tab:selected { background: #2563eb; color: white; }
 QCheckBox { spacing: 8px; }
-QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #3f3f46; border-radius: 3px; background: #09090b; }
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #3f3f46;
+    border-radius: 3px;
+    background: #09090b;
+}
 QCheckBox::indicator:checked { background: #2563eb; border-color: #2563eb; }
 """
 
@@ -87,21 +151,35 @@ def create_ssh_client(host, port, username, password, key_path):
         ssh.connect(host, port=port, username=username, password=password, timeout=10)
     return ssh
 
-# --- Background Workers ---
+# ==========================================
+# BACKGROUND THREADS & WORKERS
+# ==========================================
+
 class SFTPWorker(QThread):
     directory_loaded = pyqtSignal(list, str)
     error_occurred = pyqtSignal(str)
+
     def __init__(self, host, port, username, password, key_path, path='.'):
         super().__init__()
         self.host, self.port, self.username, self.password, self.key_path, self.path = host, port, username, password, key_path, path
+
     def run(self):
         try:
             ssh = create_ssh_client(self.host, self.port, self.username, self.password, self.key_path)
             sftp = ssh.open_sftp()
-            if self.path == '.': self.path = sftp.normalize('.')
-            file_list = [{'name': e.filename, 'is_dir': stat.S_ISDIR(e.st_mode), 'mode': e.st_mode} for e in sftp.listdir_attr(self.path)]
+            if self.path == '.':
+                self.path = sftp.normalize('.')
+            file_list = [
+                {
+                    'name': e.filename, 'is_dir': stat.S_ISDIR(e.st_mode),
+                    'mode': e.st_mode, 'size': e.st_size, 'mtime': e.st_mtime,
+                    'uid': e.st_uid, 'gid': e.st_gid
+                }
+                for e in sftp.listdir_attr(self.path)
+            ]
             file_list.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
-            sftp.close(); ssh.close()
+            sftp.close()
+            ssh.close()
             self.directory_loaded.emit(file_list, self.path)
         except Exception as e:
             self.error_occurred.emit(str(e))
@@ -110,10 +188,12 @@ class TransferWorker(QThread):
     progress_updated = pyqtSignal(int, int)
     transfer_finished = pyqtSignal(int)
     error_occurred = pyqtSignal(int, str)
+
     def __init__(self, host, port, username, password, key_path, local_path, remote_path, direction, row_index):
         super().__init__()
         self.host, self.port, self.username, self.password, self.key_path = host, port, username, password, key_path
         self.local_path, self.remote_path, self.direction, self.row_index = local_path, remote_path, direction, row_index
+
     def _upload_dir(self, sftp, local_dir, remote_dir):
         try: sftp.stat(remote_dir)
         except IOError: sftp.mkdir(remote_dir)
@@ -121,12 +201,14 @@ class TransferWorker(QThread):
             l_path, r_path = os.path.join(local_dir, item), f"{remote_dir}/{item}"
             if os.path.isdir(l_path): self._upload_dir(sftp, l_path, r_path)
             else: sftp.put(l_path, r_path)
+
     def _download_dir(self, sftp, remote_dir, local_dir):
         os.makedirs(local_dir, exist_ok=True)
         for item in sftp.listdir_attr(remote_dir):
             r_path, l_path = f"{remote_dir}/{item.filename}", os.path.join(local_dir, item.filename)
             if stat.S_ISDIR(item.st_mode): self._download_dir(sftp, r_path, l_path)
             else: sftp.get(r_path, l_path)
+
     def run(self):
         try:
             ssh = create_ssh_client(self.host, self.port, self.username, self.password, self.key_path)
@@ -137,7 +219,8 @@ class TransferWorker(QThread):
                 if os.path.isdir(self.local_path):
                     self.progress_updated.emit(self.row_index, 0)
                     self._upload_dir(sftp, self.local_path, self.remote_path)
-                else: sftp.put(self.local_path, self.remote_path, callback=cb)
+                else:
+                    sftp.put(self.local_path, self.remote_path, callback=cb)
             else:
                 is_r_dir = False
                 try: is_r_dir = stat.S_ISDIR(sftp.stat(self.remote_path).st_mode)
@@ -145,19 +228,125 @@ class TransferWorker(QThread):
                 if is_r_dir:
                     self.progress_updated.emit(self.row_index, 0)
                     self._download_dir(sftp, self.remote_path, self.local_path)
-                else: sftp.get(self.remote_path, self.local_path, callback=cb)
-            sftp.close(); ssh.close()
+                else:
+                    sftp.get(self.remote_path, self.local_path, callback=cb)
+            sftp.close()
+            ssh.close()
             self.transfer_finished.emit(self.row_index)
         except Exception as e:
             self.error_occurred.emit(self.row_index, str(e))
 
+class SyncWorker(QThread):
+    sync_log = pyqtSignal(str)
+    file_to_transfer = pyqtSignal(str, str, str)
+    finished = pyqtSignal(int)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, host, port, username, password, key_path, local_dir, remote_dir, direction='upload'):
+        super().__init__()
+        self.host, self.port, self.username, self.password, self.key_path = host, port, username, password, key_path
+        self.local_dir, self.remote_dir, self.direction = local_dir, remote_dir, direction
+
+    def run(self):
+        try:
+            ssh = create_ssh_client(self.host, self.port, self.username, self.password, self.key_path)
+            sftp = ssh.open_sftp()
+            count = 0
+            self.sync_log.emit(f"Starting directory comparison between [{self.local_dir}] and [{self.remote_dir}]...")
+
+            if self.direction == 'upload':
+                remote_files = {}
+                try:
+                    for attr in sftp.listdir_attr(self.remote_dir):
+                        remote_files[attr.filename] = attr
+                except IOError:
+                    sftp.mkdir(self.remote_dir)
+
+                for f in os.listdir(self.local_dir):
+                    l_path = os.path.join(self.local_dir, f)
+                    if os.path.isfile(l_path):
+                        l_stat = os.stat(l_path)
+                        r_attr = remote_files.get(f)
+                        if r_attr:
+                            if l_stat.st_mtime <= r_attr.st_mtime and l_stat.st_size == r_attr.st_size:
+                                continue
+                        r_path = f"{self.remote_dir.rstrip('/')}/{f}"
+                        self.sync_log.emit(f"Queued upload (changed): {f}")
+                        self.file_to_transfer.emit(l_path, r_path, 'upload')
+                        count += 1
+            else:
+                for attr in sftp.listdir_attr(self.remote_dir):
+                    if not stat.S_ISDIR(attr.st_mode):
+                        l_path = os.path.join(self.local_dir, attr.filename)
+                        r_path = f"{self.remote_dir.rstrip('/')}/{attr.filename}"
+                        if os.path.exists(l_path):
+                            l_stat = os.stat(l_path)
+                            if attr.st_mtime <= l_stat.st_mtime and attr.st_size == l_stat.st_size:
+                                continue
+                        self.sync_log.emit(f"Queued download (changed): {attr.filename}")
+                        self.file_to_transfer.emit(l_path, r_path, 'download')
+                        count += 1
+
+            sftp.close()
+            ssh.close()
+            self.sync_log.emit(f"Sync inspection complete. {count} files queued.")
+            self.finished.emit(count)
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+
+class TerminalThread(QThread):
+    data_received = pyqtSignal(str)
+    connection_lost = pyqtSignal()
+
+    def __init__(self, host, port, username, password, key_path):
+        super().__init__()
+        self.host, self.port, self.username, self.password, self.key_path = host, port, username, password, key_path
+        self.running = True
+        self.channel = None
+        self.ssh = None
+
+    def run(self):
+        try:
+            self.ssh = create_ssh_client(self.host, self.port, self.username, self.password, self.key_path)
+            self.channel = self.ssh.invoke_shell(term='xterm', width=100, height=35)
+            self.channel.settimeout(0.2)
+            while self.running:
+                if self.channel.exit_status_ready():
+                    break
+                try:
+                    data = self.channel.recv(2048)
+                    if data:
+                        text = data.decode('utf-8', errors='replace')
+                        # Catch CSI codes, OSC window titles, AND 2-byte terminal formats like ESC 7, ESC 8, ESC c
+                        clean_text = re.sub(r'\x1b\[[0-9;?]*[a-zA-Z]|\x1b\].*?(?:\x07|\x1b\\)|\x1b[78=><cEHMNOZ]', '', text)
+                        self.data_received.emit(clean_text)
+                except Exception:
+                    time.sleep(0.05)
+        except Exception as e:
+            self.data_received.emit(f"\n[Terminal Error: {e}]\n")
+        finally:
+            if self.channel: self.channel.close()
+            if self.ssh: self.ssh.close()
+            self.connection_lost.emit()
+
+    def send_data(self, text):
+        if self.channel and not self.channel.closed:
+            try: self.channel.send(text)
+            except: pass
+
+    def stop(self):
+        self.running = False
+        self.wait()
+
 class RemoteCommandWorker(QThread):
     command_finished = pyqtSignal()
     error_occurred = pyqtSignal(str)
+
     def __init__(self, host, port, username, password, key_path, command, path, arg=None):
         super().__init__()
         self.host, self.port, self.username, self.password, self.key_path = host, port, username, password, key_path
         self.command, self.path, self.arg = command, path, arg
+
     def run(self):
         try:
             ssh = create_ssh_client(self.host, self.port, self.username, self.password, self.key_path)
@@ -165,8 +354,17 @@ class RemoteCommandWorker(QThread):
             if self.command == 'mkdir': sftp.mkdir(self.path)
             elif self.command == 'rm': sftp.remove(self.path)
             elif self.command == 'rmdir': sftp.rmdir(self.path)
-            elif self.command == 'chmod': sftp.chmod(self.path, self.arg)
             elif self.command == 'rename': sftp.rename(self.path, self.arg)
+            elif self.command == 'properties':
+                mode, uid, gid = self.arg
+                if mode is not None:
+                    sftp.chmod(self.path, mode)
+                if uid != -1 or gid != -1:
+                    if uid == -1 or gid == -1:
+                        st = sftp.stat(self.path)
+                        if uid == -1: uid = st.st_uid
+                        if gid == -1: gid = st.st_gid
+                    sftp.chown(self.path, uid, gid)
             sftp.close(); ssh.close()
             self.command_finished.emit()
         except Exception as e:
@@ -175,9 +373,11 @@ class RemoteCommandWorker(QThread):
 class RemoteReadWorker(QThread):
     content_loaded = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
+
     def __init__(self, host, port, username, password, key_path, remote_path):
         super().__init__()
         self.host, self.port, self.username, self.password, self.key_path, self.remote_path = host, port, username, password, key_path, remote_path
+
     def run(self):
         try:
             ssh = create_ssh_client(self.host, self.port, self.username, self.password, self.key_path)
@@ -190,9 +390,11 @@ class RemoteReadWorker(QThread):
 class RemoteWriteWorker(QThread):
     write_finished = pyqtSignal()
     error_occurred = pyqtSignal(str)
+
     def __init__(self, host, port, username, password, key_path, remote_path, content):
         super().__init__()
         self.host, self.port, self.username, self.password, self.key_path, self.remote_path, self.content = host, port, username, password, key_path, remote_path, content
+
     def run(self):
         try:
             ssh = create_ssh_client(self.host, self.port, self.username, self.password, self.key_path)
@@ -201,6 +403,10 @@ class RemoteWriteWorker(QThread):
             sftp.close(); ssh.close()
             self.write_finished.emit()
         except Exception as e: self.error_occurred.emit(str(e))
+
+# ==========================================
+# UI COMPONENTS & SYNTAX HIGHLIGHTER
+# ==========================================
 
 class RemoteTreeView(QTreeView):
     files_dropped = pyqtSignal(list)
@@ -218,69 +424,96 @@ class RemoteTreeView(QTreeView):
         event.acceptProposedAction()
 
 class PropertiesDialog(QDialog):
-    def __init__(self, filename, mode, parent=None):
+    def __init__(self, filename, mode, uid, gid, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Properties: {filename}")
-        layout = QFormLayout(self)
+        self.resize(380, 480)
+        layout = QVBoxLayout(self)
+
+        form_layout = QFormLayout()
+        self.uid_input = QLineEdit(str(uid))
+        self.gid_input = QLineEdit(str(gid))
+        
+        # Strip to just the 3 octal digits
+        current_octal = oct(stat.S_IMODE(mode))[-3:].zfill(3)
+        self.octal_input = QLineEdit(current_octal)
+        self.octal_input.textChanged.connect(self.update_checkboxes_from_octal)
+
+        form_layout.addRow("Owner UID:", self.uid_input)
+        form_layout.addRow("Group GID:", self.gid_input)
+        form_layout.addRow("Octal Mode:", self.octal_input)
+        layout.addLayout(form_layout)
+
         self.perms = {
             'Owner': {'Read': stat.S_IRUSR, 'Write': stat.S_IWUSR, 'Execute': stat.S_IXUSR},
             'Group': {'Read': stat.S_IRGRP, 'Write': stat.S_IWGRP, 'Execute': stat.S_IXGRP},
             'Public': {'Read': stat.S_IROTH, 'Write': stat.S_IWOTH, 'Execute': stat.S_IXOTH}
         }
         self.cbs = []
+        
         for group, modes in self.perms.items():
             hb = QHBoxLayout()
+            lbl = QLabel(f"{group}:")
+            lbl.setFixedWidth(60)
+            hb.addWidget(lbl)
             for label, flag in modes.items():
                 cb = QCheckBox(label)
                 cb.setChecked(bool(mode & flag))
+                cb.stateChanged.connect(self.update_octal_from_checkboxes)
                 self.cbs.append((cb, flag))
                 hb.addWidget(cb)
-            layout.addRow(group, hb)
-        self.btn = QPushButton("Apply Permissions")
+            layout.addLayout(hb)
+
+        layout.addStretch()
+        self.btn = QPushButton("Apply Properties")
         self.btn.clicked.connect(self.accept)
-        layout.addRow(self.btn)
-    def get_new_mode(self):
+        layout.addWidget(self.btn)
+
+    def update_octal_from_checkboxes(self):
+        if not self.isActiveWindow(): return
         new_mode = 0
         for cb, flag in self.cbs:
             if cb.isChecked(): new_mode |= flag
-        return new_mode
+        self.octal_input.blockSignals(True)
+        self.octal_input.setText(oct(new_mode)[-3:].zfill(3))
+        self.octal_input.blockSignals(False)
 
-# --- Multi-Language Syntax Highlighter ---
+    def update_checkboxes_from_octal(self):
+        try:
+            val = int(self.octal_input.text(), 8)
+            for cb, flag in self.cbs:
+                cb.blockSignals(True)
+                cb.setChecked(bool(val & flag))
+                cb.blockSignals(False)
+        except ValueError:
+            pass
+
+    def get_properties(self):
+        try: new_mode = int(self.octal_input.text(), 8)
+        except: new_mode = None
+        uid = int(self.uid_input.text()) if self.uid_input.text().isdigit() else -1
+        gid = int(self.gid_input.text()) if self.gid_input.text().isdigit() else -1
+        return new_mode, uid, gid
+
+
 class EditorSyntaxHighlighter(QSyntaxHighlighter):
     def __init__(self, document, filename):
         super().__init__(document)
         self.highlightingRules = []
         ext = os.path.splitext(filename)[1].lower()
-        
-        keywordFormat = QTextCharFormat()
-        keywordFormat.setForeground(QColor("#F92672"))
-        keywordFormat.setFontWeight(QFont.Weight.Bold)
-        
-        builtinFormat = QTextCharFormat()
-        builtinFormat.setForeground(QColor("#66D9EF"))
-        
-        stringFormat = QTextCharFormat()
-        stringFormat.setForeground(QColor("#E6DB74"))
-        
-        numberFormat = QTextCharFormat()
-        numberFormat.setForeground(QColor("#AE81FF"))
-        
-        self.commentFormat = QTextCharFormat()
-        self.commentFormat.setForeground(QColor("#75715E"))
-        
-        varFormat = QTextCharFormat()
-        varFormat.setForeground(QColor("#FD971F"))
-        
-        tagFormat = QTextCharFormat()
-        tagFormat.setForeground(QColor("#F92672"))
-        
-        attrFormat = QTextCharFormat()
-        attrFormat.setForeground(QColor("#A6E22E"))
+
+        keywordFormat = QTextCharFormat(); keywordFormat.setForeground(QColor("#F92672")); keywordFormat.setFontWeight(QFont.Weight.Bold)
+        builtinFormat = QTextCharFormat(); builtinFormat.setForeground(QColor("#66D9EF"))
+        stringFormat = QTextCharFormat(); stringFormat.setForeground(QColor("#E6DB74"))
+        numberFormat = QTextCharFormat(); numberFormat.setForeground(QColor("#AE81FF"))
+        self.commentFormat = QTextCharFormat(); self.commentFormat.setForeground(QColor("#75715E"))
+        varFormat = QTextCharFormat(); varFormat.setForeground(QColor("#FD971F"))
+        tagFormat = QTextCharFormat(); tagFormat.setForeground(QColor("#F92672"))
+        attrFormat = QTextCharFormat(); attrFormat.setForeground(QColor("#A6E22E"))
 
         self.highlightingRules.append((QRegularExpression(r"\b[0-9]+(\.[0-9]+)?\b"), numberFormat))
         self.highlightingRules.append((QRegularExpression(r'".*?"'), stringFormat))
         self.highlightingRules.append((QRegularExpression(r"'.*?'"), stringFormat))
-
         self.commentStartExpression = QRegularExpression()
         self.commentEndExpression = QRegularExpression()
 
@@ -292,7 +525,6 @@ class EditorSyntaxHighlighter(QSyntaxHighlighter):
             self.highlightingRules.append((QRegularExpression(r"#[^\n]*"), self.commentFormat))
             self.commentStartExpression = QRegularExpression(r'"""')
             self.commentEndExpression = QRegularExpression(r'"""')
-            
         elif ext in ['.php']:
             keywords = ["if", "else", "elseif", "while", "do", "for", "foreach", "as", "switch", "case", "break", "continue", "return", "require", "include", "require_once", "include_once", "class", "public", "private", "protected", "static", "function", "echo", "print", "new", "throw", "try", "catch", "namespace", "use", "true", "false", "null"]
             self.highlightingRules.append((QRegularExpression(r"\b(" + "|".join(keywords) + r")\b"), keywordFormat))
@@ -302,40 +534,12 @@ class EditorSyntaxHighlighter(QSyntaxHighlighter):
             self.highlightingRules.append((QRegularExpression(r"#[^\n]*"), self.commentFormat))
             self.commentStartExpression = QRegularExpression(r"/\*")
             self.commentEndExpression = QRegularExpression(r"\*/")
-            
         elif ext in ['.sql']:
             keywords = ["select", "from", "where", "insert", "into", "values", "update", "set", "delete", "join", "inner", "left", "right", "outer", "on", "as", "and", "or", "not", "group by", "order by", "having", "limit", "offset", "create", "table", "drop", "alter", "index", "view", "union", "all", "null", "is", "exists", "between", "like", "in"]
             self.highlightingRules.append((QRegularExpression(r"(?i)\b(" + "|".join(keywords).replace(" ", r"\s+") + r")\b"), keywordFormat))
             self.highlightingRules.append((QRegularExpression(r"--[^\n]*"), self.commentFormat))
             self.commentStartExpression = QRegularExpression(r"/\*")
             self.commentEndExpression = QRegularExpression(r"\*/")
-            
-        elif ext in ['.c', '.cpp', '.h', '.hpp', '.cs', '.java']:
-            keywords = ["if", "else", "while", "do", "for", "switch", "case", "break", "continue", "return", "class", "struct", "public", "private", "protected", "virtual", "override", "template", "typename", "new", "delete", "try", "catch", "throw", "namespace", "using", "inline", "true", "false", "null", "nullptr"]
-            types = ["int", "float", "double", "char", "void", "bool", "auto", "long", "short", "unsigned", "signed", "size_t", "string"]
-            self.highlightingRules.append((QRegularExpression(r"\b(" + "|".join(keywords) + r")\b"), keywordFormat))
-            self.highlightingRules.append((QRegularExpression(r"\b(" + "|".join(types) + r")\b"), builtinFormat))
-            self.highlightingRules.append((QRegularExpression(r"#[a-zA-Z]+"), keywordFormat)) 
-            self.highlightingRules.append((QRegularExpression(r"//[^\n]*"), self.commentFormat))
-            self.commentStartExpression = QRegularExpression(r"/\*")
-            self.commentEndExpression = QRegularExpression(r"\*/")
-            
-        elif ext in ['.js', '.ts', '.jsx', '.tsx', '.json']:
-            keywords = ["if", "else", "while", "do", "for", "switch", "case", "break", "continue", "return", "function", "var", "let", "const", "class", "extends", "super", "new", "try", "catch", "finally", "throw", "import", "export", "default", "yield", "await", "async", "typeof", "instanceof", "true", "false", "null", "undefined"]
-            builtins = ["console", "window", "document", "Math", "JSON", "Promise", "String", "Number", "Boolean", "Array", "Object", "Map", "Set"]
-            self.highlightingRules.append((QRegularExpression(r"\b(" + "|".join(keywords) + r")\b"), keywordFormat))
-            self.highlightingRules.append((QRegularExpression(r"\b(" + "|".join(builtins) + r")\b"), builtinFormat))
-            self.highlightingRules.append((QRegularExpression(r"//[^\n]*"), self.commentFormat))
-            self.commentStartExpression = QRegularExpression(r"/\*")
-            self.commentEndExpression = QRegularExpression(r"\*/")
-            
-        elif ext in ['.html', '.xml', '.vue']:
-            self.highlightingRules.append((QRegularExpression(r"<\/?[\w:-]+"), tagFormat))
-            self.highlightingRules.append((QRegularExpression(r"\/?>"), tagFormat))
-            self.highlightingRules.append((QRegularExpression(r"\b[\w:-]+(?=\=)"), attrFormat))
-            self.commentStartExpression = QRegularExpression(r"<!--")
-            self.commentEndExpression = QRegularExpression(r"-->")
-            
         else:
             keywords = ["if", "then", "else", "fi", "elif", "for", "while", "do", "done", "case", "esac", "echo", "export", "return", "function", "true", "false"]
             self.highlightingRules.append((QRegularExpression(r"\b(" + "|".join(keywords) + r")\b"), keywordFormat))
@@ -350,28 +554,23 @@ class EditorSyntaxHighlighter(QSyntaxHighlighter):
             while matchIterator.hasNext():
                 match = matchIterator.next()
                 self.setFormat(match.capturedStart(), match.capturedLength(), format)
-        
         self.setCurrentBlockState(0)
         startIndex = 0
         if self.previousBlockState() != 1:
             match = self.commentStartExpression.match(text)
             startIndex = match.capturedStart()
-        
         while startIndex >= 0:
             match = self.commentEndExpression.match(text, startIndex)
             endIndex = match.capturedStart()
-            commentLength = 0
             if endIndex == -1:
                 self.setCurrentBlockState(1)
                 commentLength = len(text) - startIndex
             else:
                 commentLength = endIndex - startIndex + match.capturedLength()
-            
             self.setFormat(startIndex, commentLength, self.commentFormat)
             nextMatch = self.commentStartExpression.match(text, startIndex + commentLength)
             startIndex = nextMatch.capturedStart()
 
-# --- Editor UI Classes ---
 class LineNumberArea(QWidget):
     def __init__(self, editor):
         super().__init__(editor)
@@ -388,11 +587,9 @@ class CodeEditor(QPlainTextEdit):
         self.cursorPositionChanged.connect(self.highlightCurrentLine)
         self.updateLineNumberAreaWidth(0)
         self.highlightCurrentLine()
-        
         self.setStyleSheet("""
             QPlainTextEdit { background-color: #272822; color: #F8F8F2; selection-background-color: #49483E; border: 1px solid #18181b; border-radius: 4px; }
         """)
-        
         font = QFont("Fira Code", 11)
         font.setStyleHint(QFont.StyleHint.Monospace)
         self.setFont(font)
@@ -437,10 +634,9 @@ class CodeEditor(QPlainTextEdit):
         blockNumber = block.blockNumber()
         top = round(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
         bottom = top + round(self.blockBoundingRect(block).height())
-        
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
-                painter.setPen(QColor("#75715E")) 
+                painter.setPen(QColor("#75715E"))
                 painter.drawText(0, top, self.lineNumberArea.width() - 8, self.fontMetrics().height(),
                                  Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, str(blockNumber + 1))
             block = block.next()
@@ -453,35 +649,29 @@ class TextEditorDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(f"Editing: {filename}")
         self.resize(900, 700)
-        
         layout = QVBoxLayout(self)
-        
         header_layout = QHBoxLayout()
         header_lbl = QLabel(f"File: {filename}")
         header_lbl.setStyleSheet("color: #a1a1aa; font-weight: bold; font-size: 14px;")
         header_layout.addWidget(header_lbl)
         header_layout.addStretch()
-        
         self.editor = CodeEditor()
         self.editor.setPlainText(content)
         self.highlighter = EditorSyntaxHighlighter(self.editor.document(), filename)
-        
         btn_layout = QHBoxLayout()
         self.save_btn = QPushButton("Save & Upload")
         self.save_btn.clicked.connect(self.accept)
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setStyleSheet("background-color: #ef4444;")
         self.cancel_btn.clicked.connect(self.reject)
-        
         btn_layout.addStretch()
         btn_layout.addWidget(self.cancel_btn)
         btn_layout.addWidget(self.save_btn)
-        
         layout.addLayout(header_layout)
         layout.addWidget(self.editor)
         layout.addLayout(btn_layout)
-        
-    def get_content(self): 
+
+    def get_content(self):
         return self.editor.toPlainText()
 
 class SiteManagerDialog(QDialog):
@@ -489,28 +679,24 @@ class SiteManagerDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Site Manager")
         self.resize(600, 450)
-        self.config_dir = os.path.expanduser("~/.config/sftp_elite")
+        self.config_dir = os.path.expanduser("~/.config/nova_sftp")
         self.config_file = os.path.join(self.config_dir, "sites.json")
         self.sites = self.load_data()
-
         layout = QHBoxLayout(self)
         self.site_list = QListWidget()
         self.site_list.addItems(self.sites.keys())
         self.site_list.currentTextChanged.connect(self.populate_fields)
         layout.addWidget(self.site_list, 1)
-
         edit_layout = QVBoxLayout()
         form_layout = QFormLayout()
-        
         self.name_input = QLineEdit()
         self.host_input = QLineEdit()
-        self.port_input = QLineEdit("2206")
+        self.port_input = QLineEdit("22")
         self.port_input.setValidator(QIntValidator(1, 65535, self))
         self.user_input = QLineEdit()
         self.pass_input = QLineEdit()
         self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.pass_input.setPlaceholderText("Password or Key Passphrase")
-        
         key_layout = QHBoxLayout()
         self.key_input = QLineEdit()
         self.key_input.setPlaceholderText("Leave blank for password auth")
@@ -518,7 +704,6 @@ class SiteManagerDialog(QDialog):
         self.key_btn.clicked.connect(self.browse_key)
         key_layout.addWidget(self.key_input)
         key_layout.addWidget(self.key_btn)
-
         form_layout.addRow("Site Name:", self.name_input)
         form_layout.addRow("Host/IP:", self.host_input)
         form_layout.addRow("Port:", self.port_input)
@@ -526,31 +711,24 @@ class SiteManagerDialog(QDialog):
         form_layout.addRow("Private Key:", key_layout)
         form_layout.addRow("Password:", self.pass_input)
         edit_layout.addLayout(form_layout)
-
         btn_layout = QHBoxLayout()
-        
         self.new_btn = QPushButton("Clear / New")
         self.new_btn.setStyleSheet("background-color: #52525b;")
         self.new_btn.clicked.connect(self.clear_fields)
-        
         self.save_btn = QPushButton("Save / Update")
         self.save_btn.clicked.connect(self.save_site)
-        
         self.delete_btn = QPushButton("Delete")
         self.delete_btn.setStyleSheet("background-color: #ef4444;")
         self.delete_btn.clicked.connect(self.delete_site)
-        
         self.load_btn = QPushButton("Connect")
         self.load_btn.setStyleSheet("background-color: #10b981;")
         self.load_btn.clicked.connect(self.accept)
-
         btn_layout.addWidget(self.new_btn)
         btn_layout.addWidget(self.save_btn)
         btn_layout.addWidget(self.delete_btn)
         btn_layout.addWidget(self.load_btn)
         edit_layout.addLayout(btn_layout)
         layout.addLayout(edit_layout, 2)
-
         self.clear_fields()
 
     def browse_key(self):
@@ -568,17 +746,17 @@ class SiteManagerDialog(QDialog):
             data = self.sites[site_name]
             self.name_input.setText(site_name)
             self.host_input.setText(data.get('host', ''))
-            self.port_input.setText(str(data.get('port', 2206)))
+            self.port_input.setText(str(data.get('port', 22)))
             self.user_input.setText(data.get('user', ''))
             self.key_input.setText(data.get('key_path', ''))
-            saved_pass = keyring.get_password("sftp_elite", site_name)
+            saved_pass = keyring.get_password("nova_sftp", site_name)
             self.pass_input.setText(saved_pass if saved_pass else "")
 
     def clear_fields(self):
         self.site_list.clearSelection()
         self.name_input.clear()
         self.host_input.clear()
-        self.port_input.setText("2206")
+        self.port_input.setText("22")
         self.user_input.clear()
         self.key_input.clear()
         self.pass_input.clear()
@@ -586,9 +764,9 @@ class SiteManagerDialog(QDialog):
     def save_site(self):
         name = self.name_input.text().strip()
         if not name: return
-        self.sites[name] = { 'host': self.host_input.text(), 'port': int(self.port_input.text() or 2206), 'user': self.user_input.text(), 'key_path': self.key_input.text() }
+        self.sites[name] = { 'host': self.host_input.text(), 'port': int(self.port_input.text() or 22), 'user': self.user_input.text(), 'key_path': self.key_input.text() }
         with open(self.config_file, 'w') as f: json.dump(self.sites, f)
-        if self.pass_input.text(): keyring.set_password("sftp_elite", name, self.pass_input.text())
+        if self.pass_input.text(): keyring.set_password("nova_sftp", name, self.pass_input.text())
         if not self.site_list.findItems(name, Qt.MatchFlag.MatchExactly): self.site_list.addItem(name)
         QMessageBox.information(self, "Saved", f"Site '{name}' saved.")
         self.clear_fields()
@@ -600,163 +778,158 @@ class SiteManagerDialog(QDialog):
         if name in self.sites:
             del self.sites[name]
             with open(self.config_file, 'w') as f: json.dump(self.sites, f)
-            try: keyring.delete_password("sftp_elite", name)
+            try: keyring.delete_password("nova_sftp", name)
             except: pass
         self.site_list.takeItem(self.site_list.row(item))
         self.clear_fields()
 
     def get_selected_site(self):
-        return { 'host': self.host_input.text(), 'port': self.port_input.text(), 'user': self.user_input.text(), 'key_path': self.key_input.text(), 'password': self.pass_input.text() }
+        return { 'name': self.name_input.text(), 'host': self.host_input.text(), 'port': self.port_input.text(), 'user': self.user_input.text(), 'key_path': self.key_input.text(), 'password': self.pass_input.text() }
 
-class SFCPClient(QMainWindow):
-    def __init__(self):
+# ==========================================
+# ISOLATED SESSION TAB WIDGET
+# ==========================================
+
+class SessionTab(QWidget):
+    status_changed = pyqtSignal(str)
+
+    def __init__(self, host, port, user, password, key_path, main_app):
         super().__init__()
-        self.setWindowTitle("Nova SFTP")
-        
-        icon_png = os.path.expanduser("~/SFCP-Elite/nova-sftp.png")
-        icon_svg = os.path.expanduser("~/SFCP-Elite/nova-sftp.svg")
-        if os.path.exists(icon_png): self.setWindowIcon(QIcon(icon_png))
-        elif os.path.exists(icon_svg): self.setWindowIcon(QIcon(icon_svg))
-            
-        self.resize(1340, 920)
+        self.host, self.port, self.user, self.password, self.key_path = host, port, user, password, key_path
+        self.main_app = main_app
         self.current_remote_path = "."
+        self.local_history, self.remote_history = [], []
         self.active_transfers = []
-        self.current_key_path = ""
-        
-        self.settings_file = os.path.expanduser("~/.config/sftp_elite/settings.json")
-        self.app_settings = self.load_settings()
-        
-        self.local_home_path = self.app_settings.get("local_home", QDir.homePath())
-        if not os.path.exists(self.local_home_path):
-            self.local_home_path = QDir.homePath()
-            
-        self.remote_home_path = "."
-        self.local_history = []
-        self.remote_history = []
-        
+        self.term_thread = None
+
         self.dir_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
         self.file_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        
-        toolbar_widget = QWidget()
-        toolbar_widget.setStyleSheet("background-color: #18181b; border: 1px solid #27272a; border-radius: 6px;")
-        conn_layout = QHBoxLayout(toolbar_widget)
-        
-        self.site_mgr_btn = QPushButton("Bookmarks")
-        self.site_mgr_btn.setStyleSheet("background-color: #4f46e5;")
-        self.site_mgr_btn.clicked.connect(self.open_site_manager)
-        
-        self.host_input = QLineEdit(); self.host_input.setPlaceholderText("Host/IP")
-        self.port_input = QLineEdit("2206"); self.port_input.setFixedWidth(70)
-        self.user_input = QLineEdit(); self.user_input.setPlaceholderText("Username")
-        self.key_btn = QToolButton(); self.key_btn.setText("🔑"); self.key_btn.clicked.connect(self.browse_main_key)
-        self.pass_input = QLineEdit(); self.pass_input.setPlaceholderText("Passphrase"); self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        
-        self.connect_btn = QPushButton("Connect")
-        self.connect_btn.clicked.connect(lambda: self.load_remote_directory('.'))
+        self.init_ui()
+        self.load_remote_directory('.')
 
-        self.native_term_btn = QPushButton(">_ Terminal")
-        self.native_term_btn.setStyleSheet("background-color: #3f3f46;")
-        self.native_term_btn.setToolTip("Launch Native Ubuntu Terminal with full shell access")
-        self.native_term_btn.clicked.connect(self.open_native_terminal)
-        
-        for w in (self.site_mgr_btn, self.host_input, self.port_input, self.user_input, self.key_btn, self.pass_input, self.connect_btn, self.native_term_btn):
-            conn_layout.addWidget(w)
-        main_layout.addWidget(toolbar_widget)
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+
+        # Quick Sync Controls Bar
+        sync_bar = QHBoxLayout()
+        sync_lbl = QLabel("Directory Sync Engine:")
+        sync_lbl.setStyleSheet("font-weight: bold; color: #10b981;")
+        self.sync_dir_combo = QComboBox()
+        self.sync_dir_combo.addItems(["Upload to Remote (Local -> Remote)", "Download to Local (Remote -> Local)"])
+        self.sync_btn = QPushButton("Run Sync")
+        self.sync_btn.setStyleSheet("background-color: #059669;")
+        self.sync_btn.clicked.connect(self.trigger_sync)
+        sync_bar.addWidget(sync_lbl)
+        sync_bar.addWidget(self.sync_dir_combo)
+        sync_bar.addWidget(self.sync_btn)
+        sync_bar.addStretch()
+        layout.addLayout(sync_bar)
 
         self.main_splitter = QSplitter(Qt.Orientation.Vertical)
         self.browser_splitter = QSplitter(Qt.Orientation.Horizontal)
-        
-        # --- Local Pane ---
+
+        # Local Pane
         local_widget = QWidget()
         local_layout = QVBoxLayout(local_widget)
         local_layout.setContentsMargins(0, 0, 0, 0)
+        local_nav = QHBoxLayout()
         
-        local_nav_layout = QHBoxLayout()
-        self.local_back_btn = QToolButton(); self.local_back_btn.setProperty("class", "nav-btn"); self.local_back_btn.setText("◀")
+        self.local_back_btn = QToolButton(); self.local_back_btn.setProperty("class", "nav-btn")
+        self.local_back_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
         self.local_back_btn.setEnabled(False); self.local_back_btn.clicked.connect(self.go_local_back)
-        self.local_up_btn = QToolButton(); self.local_up_btn.setProperty("class", "nav-btn"); self.local_up_btn.setText("▲")
+        
+        self.local_up_btn = QToolButton(); self.local_up_btn.setProperty("class", "nav-btn")
+        self.local_up_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowUp))
         self.local_up_btn.clicked.connect(self.go_local_up)
-        self.local_home_btn = QToolButton(); self.local_home_btn.setProperty("class", "nav-btn"); self.local_home_btn.setText("🏠")
+        
+        self.local_home_btn = QToolButton(); self.local_home_btn.setProperty("class", "nav-btn")
+        self.local_home_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirHomeIcon))
         self.local_home_btn.clicked.connect(self.go_local_home)
-
-        self.local_path_input = QLineEdit(self.local_home_path)
+        
+        self.local_path_input = QLineEdit(self.main_app.local_home_path)
         self.local_path_input.returnPressed.connect(self.on_local_path_entered)
-        
-        local_nav_layout.addWidget(self.local_back_btn)
-        local_nav_layout.addWidget(self.local_up_btn)
-        local_nav_layout.addWidget(self.local_home_btn)
-        local_nav_layout.addWidget(self.local_path_input)
-        
+        local_nav.addWidget(self.local_back_btn); local_nav.addWidget(self.local_up_btn)
+        local_nav.addWidget(self.local_home_btn); local_nav.addWidget(self.local_path_input)
+
         self.local_view = QTreeView()
         self.local_model = QFileSystemModel()
         self.local_model.setRootPath(QDir.rootPath())
         self.local_view.setModel(self.local_model)
-        self.local_view.setRootIndex(self.local_model.index(self.local_home_path))
+        self.local_view.setRootIndex(self.local_model.index(self.main_app.local_home_path))
+        
+        # This stretches the Name column to fill empty space, but keeps Type and Date visible
+        self.local_view.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.local_view.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.local_view.header().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        self.local_view.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        
         self.local_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.local_view.customContextMenuRequested.connect(self.on_local_context_menu)
         self.local_view.doubleClicked.connect(self.on_local_double_click)
-        
+
         local_layout.addWidget(QLabel("Local System", styleSheet="color: #a1a1aa; font-weight: bold;"))
-        local_layout.addLayout(local_nav_layout)
+        local_layout.addLayout(local_nav)
         local_layout.addWidget(self.local_view)
-        
-        # --- Remote Pane ---
+
+        # Remote Pane
         remote_widget = QWidget()
         remote_layout = QVBoxLayout(remote_widget)
         remote_layout.setContentsMargins(0, 0, 0, 0)
+        remote_nav = QHBoxLayout()
         
-        remote_nav_layout = QHBoxLayout()
-        self.remote_back_btn = QToolButton(); self.remote_back_btn.setProperty("class", "nav-btn"); self.remote_back_btn.setText("◀")
+        self.remote_back_btn = QToolButton(); self.remote_back_btn.setProperty("class", "nav-btn")
+        self.remote_back_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
         self.remote_back_btn.setEnabled(False); self.remote_back_btn.clicked.connect(self.go_remote_back)
-        self.remote_up_btn = QToolButton(); self.remote_up_btn.setProperty("class", "nav-btn"); self.remote_up_btn.setText("▲")
+        
+        self.remote_up_btn = QToolButton(); self.remote_up_btn.setProperty("class", "nav-btn")
+        self.remote_up_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowUp))
         self.remote_up_btn.clicked.connect(self.go_remote_up)
-        self.remote_home_btn = QToolButton(); self.remote_home_btn.setProperty("class", "nav-btn"); self.remote_home_btn.setText("🏠")
+        
+        self.remote_home_btn = QToolButton(); self.remote_home_btn.setProperty("class", "nav-btn")
+        self.remote_home_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DirHomeIcon))
         self.remote_home_btn.clicked.connect(self.go_remote_home)
-
-        self.remote_path_input = QLineEdit(); self.remote_path_input.setPlaceholderText("Not Connected")
+        
+        self.remote_path_input = QLineEdit(); self.remote_path_input.setPlaceholderText("Connecting...")
         self.remote_path_input.returnPressed.connect(self.on_remote_path_entered)
         self.remote_search_input = QLineEdit(); self.remote_search_input.setPlaceholderText("Filter..."); self.remote_search_input.setFixedWidth(130)
         self.remote_search_input.textChanged.connect(self.filter_remote_files)
         
-        remote_nav_layout.addWidget(self.remote_back_btn)
-        remote_nav_layout.addWidget(self.remote_up_btn)
-        remote_nav_layout.addWidget(self.remote_home_btn)
-        remote_nav_layout.addWidget(self.remote_path_input)
-        remote_nav_layout.addWidget(self.remote_search_input)
-        
+        remote_nav.addWidget(self.remote_back_btn); remote_nav.addWidget(self.remote_up_btn)
+        remote_nav.addWidget(self.remote_home_btn)
+        remote_nav.addWidget(self.remote_path_input); remote_nav.addWidget(self.remote_search_input)
+
         self.remote_view = RemoteTreeView()
         self.remote_view.files_dropped.connect(self.on_files_dropped)
         self.remote_model = QStandardItemModel()
-        self.remote_model.setHorizontalHeaderLabels(["Name"])
-        
+        self.remote_model.setHorizontalHeaderLabels(["Name", "Size", "Permissions"])
         self.proxy_model = QSortFilterProxyModel()
         self.proxy_model.setSourceModel(self.remote_model)
         self.proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        
         self.remote_view.setModel(self.proxy_model)
+        self.remote_view.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        
         self.remote_view.doubleClicked.connect(self.on_remote_double_click)
         self.remote_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.remote_view.customContextMenuRequested.connect(self.on_remote_context_menu)
-        
-        remote_layout.addWidget(QLabel("Remote Server", styleSheet="color: #a1a1aa; font-weight: bold;"))
-        remote_layout.addLayout(remote_nav_layout)
+
+        remote_layout.addWidget(QLabel(f"Remote: {self.user}@{self.host}", styleSheet="color: #a1a1aa; font-weight: bold;"))
+        remote_layout.addLayout(remote_nav)
         remote_layout.addWidget(self.remote_view)
-        
+
         self.browser_splitter.addWidget(local_widget)
         self.browser_splitter.addWidget(remote_widget)
         self.main_splitter.addWidget(self.browser_splitter)
-        
-        # --- Bottom Tabs (Transfers Only) ---
+
+        # Bottom Pane: Tabs for Transfers & Terminal
         self.bottom_tabs = QTabWidget()
-        self.bottom_tabs.setFixedHeight(220)
-        
+        self.bottom_tabs.setFixedHeight(260)
+
+        # Queue Sub-Tab
         queue_widget = QWidget()
-        queue_layout = QVBoxLayout(queue_widget)
-        queue_layout.setContentsMargins(0,0,0,0)
+        queue_layout = QVBoxLayout(queue_widget); queue_layout.setContentsMargins(0, 0, 0, 0)
         self.queue_table = QTableView()
         self.queue_table.setAlternatingRowColors(True)
         self.queue_table.setShowGrid(False)
@@ -768,71 +941,102 @@ class SFCPClient(QMainWindow):
         self.queue_table.setColumnWidth(0, 50); self.queue_table.setColumnWidth(2, 120)
         self.queue_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         queue_layout.addWidget(self.queue_table)
-        
         self.bottom_tabs.addTab(queue_widget, "Transfer Queue")
+
+        # Terminal Sub-Tab
+        term_widget = QWidget()
+        term_layout = QVBoxLayout(term_widget); term_layout.setContentsMargins(5, 5, 5, 5)
+        self.term_display = QPlainTextEdit()
+        self.term_display.setReadOnly(True)
+        self.term_display.setStyleSheet("background-color: #0c0a09; color: #4ade80; font-family: monospace; font-size: 12px; border: 1px solid #27272a;")
+        term_input_layout = QHBoxLayout()
+        term_prompt = QLabel("$ ")
+        term_prompt.setStyleSheet("color: #38bdf8; font-weight: bold; font-family: monospace;")
+        self.term_input = QLineEdit()
+        self.term_input.setStyleSheet("background-color: #18181b; color: #f4f4f5; font-family: monospace;")
+        self.term_input.returnPressed.connect(self.send_terminal_cmd)
+        term_send_btn = QPushButton("Send")
+        term_send_btn.clicked.connect(self.send_terminal_cmd)
+        term_ctrl_c = QPushButton("Ctrl+C")
+        term_ctrl_c.setStyleSheet("background-color: #ef4444;")
+        term_ctrl_c.clicked.connect(lambda: self.term_thread.send_data('\x03') if self.term_thread else None)
+
+        term_input_layout.addWidget(term_prompt)
+        term_input_layout.addWidget(self.term_input)
+        term_input_layout.addWidget(term_send_btn)
+        term_input_layout.addWidget(term_ctrl_c)
+        term_layout.addWidget(self.term_display)
+        term_layout.addLayout(term_input_layout)
+        self.bottom_tabs.addTab(term_widget, "Interactive Terminal")
+
+        # Sync Log Sub-Tab
+        self.sync_log_view = QPlainTextEdit()
+        self.sync_log_view.setReadOnly(True)
+        self.sync_log_view.setStyleSheet("background-color: #0c0a09; color: #e4e4e7; font-family: monospace;")
+        self.bottom_tabs.addTab(self.sync_log_view, "Sync Engine Log")
+
         self.main_splitter.addWidget(self.bottom_tabs)
+        layout.addWidget(self.main_splitter)
+
+        self.start_terminal()
+
+    # --- Terminal Methods ---
+    def start_terminal(self):
+        self.term_thread = TerminalThread(self.host, self.port, self.user, self.password, self.key_path)
+        self.term_thread.data_received.connect(self.on_terminal_data)
+        self.term_thread.connection_lost.connect(lambda: self.term_display.appendPlainText("\n[Session Closed]\n"))
+        self.term_thread.start()
+
+    def on_terminal_data(self, text):
+        # Normalize standard server newlines so we don't accidentally delete lines
+        text = text.replace('\r\n', '\n')
         
-        main_layout.addWidget(self.main_splitter)
-        self.statusBar().showMessage("Ready")
+        cursor = self.term_display.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.term_display.setTextCursor(cursor)
 
-    def load_settings(self):
-        if os.path.exists(self.settings_file):
-            with open(self.settings_file, 'r') as f: return json.load(f)
-        return {}
+        for char in text:
+            if char == '\r':
+                # A lone carriage return means "overwrite the current line" (Progress bars)
+                cursor.movePosition(QTextCursor.MoveOperation.StartOfLine, QTextCursor.MoveMode.KeepAnchor)
+                cursor.removeSelectedText()
+            elif char == '\b' or char == '\x08':
+                # Handle backspaces properly so typos are visually deleted
+                cursor.deletePreviousChar()
+            else:
+                cursor.insertText(char)
+                
+        self.term_display.setTextCursor(cursor)
 
-    def save_settings(self):
-        if not os.path.exists(os.path.dirname(self.settings_file)):
-            os.makedirs(os.path.dirname(self.settings_file))
-        with open(self.settings_file, 'w') as f: json.dump(self.app_settings, f)
+    def send_terminal_cmd(self):
+        cmd = self.term_input.text()
+        if self.term_thread:
+            self.term_thread.send_data(cmd + '\n')
+            self.term_input.clear()
 
-    def set_as_local_home(self, path):
-        self.local_home_path = path
-        self.app_settings["local_home"] = path
-        self.save_settings()
-        QMessageBox.information(self, "Home Set", f"Local home directory set to:\n{path}")
-
-    def set_as_remote_home(self, path):
-        host = self.host_input.text()
-        if not host: return
-        if "remote_homes" not in self.app_settings:
-            self.app_settings["remote_homes"] = {}
-        self.app_settings["remote_homes"][host] = path
-        self.save_settings()
-        QMessageBox.information(self, "Home Set", f"Remote home directory for '{host}' set to:\n{path}")
-
-    # --- Native OS Terminal Launcher ---
-    def open_native_terminal(self):
-        host = self.host_input.text().strip()
-        user = self.user_input.text().strip()
-        port = self.port_input.text().strip() or "22"
-        
-        if not host or not user:
-            QMessageBox.warning(self, "Missing Info", "Connect to a server first to launch the terminal.")
+    # --- Directory Sync ---
+    def trigger_sync(self):
+        direction = 'upload' if self.sync_dir_combo.currentIndex() == 0 else 'download'
+        local_dir = self.local_path_input.text()
+        remote_dir = self.current_remote_path
+        if remote_dir in ['.', '']:
+            QMessageBox.warning(self, "Warning", "Please navigate to a valid remote directory first.")
             return
-            
-        ssh_cmd = ["ssh", "-p", port]
-        if self.current_key_path and os.path.exists(self.current_key_path):
-            ssh_cmd.extend(["-i", self.current_key_path])
-        
-        if self.current_remote_path and self.current_remote_path not in [".", "/"]:
-            ssh_cmd.extend(["-t", f"{user}@{host}", f"cd '{self.current_remote_path}' ; exec $SHELL -l"])
-        else:
-            ssh_cmd.append(f"{user}@{host}")
-            
-        try:
-            subprocess.Popen(["gnome-terminal", "--"] + ssh_cmd)
-        except Exception:
-            try:
-                subprocess.Popen(["x-terminal-emulator", "-e", " ".join(ssh_cmd)])
-            except Exception as ex:
-                QMessageBox.critical(self, "Error", f"Could not launch native terminal: {ex}")
 
-    # --- Local Navigation Actions ---
+        self.sync_log_view.clear()
+        self.bottom_tabs.setCurrentWidget(self.sync_log_view)
+        self.sync_worker = SyncWorker(self.host, self.port, self.user, self.password, self.key_path, local_dir, remote_dir, direction)
+        self.sync_worker.sync_log.connect(lambda msg: self.sync_log_view.appendPlainText(msg))
+        self.sync_worker.file_to_transfer.connect(self.start_transfer)
+        self.sync_worker.error_occurred.connect(lambda err: QMessageBox.critical(self, "Sync Error", err))
+        self.sync_worker.start()
+
+    # --- Navigation ---
     def set_local_path(self, target_path, record_history=True):
         if not os.path.exists(target_path): return
-        current_path = self.local_path_input.text()
-        if record_history and current_path != target_path:
-            self.local_history.append(current_path)
+        curr = self.local_path_input.text()
+        if record_history and curr != target_path:
+            self.local_history.append(curr)
             self.local_back_btn.setEnabled(True)
         self.local_view.setRootIndex(self.local_model.index(target_path))
         self.local_path_input.setText(target_path)
@@ -844,16 +1048,17 @@ class SFCPClient(QMainWindow):
             self.set_local_path(prev, record_history=False)
 
     def go_local_up(self):
-        current = self.local_path_input.text()
-        parent = os.path.dirname(current.rstrip(os.sep))
+        curr = self.local_path_input.text()
+        parent = os.path.dirname(curr.rstrip(os.sep))
         if parent and os.path.exists(parent): self.set_local_path(parent)
 
-    def go_local_home(self): self.set_local_path(self.local_home_path)
+    def go_local_home(self): self.set_local_path(self.main_app.local_home_path)
+    
     def on_local_path_entered(self): self.set_local_path(self.local_path_input.text())
+    
     def on_local_double_click(self, index):
         if self.local_model.isDir(index): self.set_local_path(self.local_model.filePath(index))
 
-    # --- Remote Navigation Actions ---
     def go_remote_back(self):
         if self.remote_history:
             prev = self.remote_history.pop()
@@ -861,119 +1066,73 @@ class SFCPClient(QMainWindow):
             self.load_remote_directory(prev, record_history=False)
 
     def go_remote_up(self):
-        if self.current_remote_path != "." and self.current_remote_path != "/":
+        if self.current_remote_path not in [".", "/"]:
             parent = "/".join(self.current_remote_path.rstrip('/').split('/')[:-1]) or "/"
             self.load_remote_directory(parent)
 
     def go_remote_home(self):
-        host = self.host_input.text()
-        if host:
-            target = self.app_settings.get("remote_homes", {}).get(host, self.remote_home_path)
-            self.load_remote_directory(target)
+        target = self.main_app.app_settings.get("remote_homes", {}).get(self.host, '.')
+        self.load_remote_directory(target)
 
-    def filter_remote_files(self, text):
-        self.proxy_model.setFilterRegularExpression(text)
-
-    def browse_main_key(self):
-        file, _ = QFileDialog.getOpenFileName(self, "Select SSH Key", QDir.homePath())
-        if file:
-            self.current_key_path = file
-            self.key_btn.setStyleSheet("background-color: #10b981;") 
-
-    def on_remote_path_entered(self):
-        if self.host_input.text(): self.load_remote_directory(self.remote_path_input.text().strip())
-
-    def open_site_manager(self):
-        dialog = SiteManagerDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            site_data = dialog.get_selected_site()
-            if site_data['host']:
-                self.host_input.setText(site_data['host'])
-                self.port_input.setText(site_data['port'])
-                self.user_input.setText(site_data['user'])
-                self.pass_input.setText(site_data['password'])
-                self.current_key_path = site_data['key_path']
-                self.key_btn.setStyleSheet("background-color: #10b981;" if self.current_key_path else "")
-                self.load_remote_directory('.')
+    def filter_remote_files(self, text): self.proxy_model.setFilterRegularExpression(text)
+    def on_remote_path_entered(self): self.load_remote_directory(self.remote_path_input.text().strip())
 
     def load_remote_directory(self, path, record_history=True):
-        if not self.host_input.text() or not self.user_input.text(): return
-        
-        host = self.host_input.text()
         if path == '.':
-            path = self.app_settings.get("remote_homes", {}).get(host, '.')
+            path = self.main_app.app_settings.get("remote_homes", {}).get(self.host, '.')
             
         if record_history and self.current_remote_path != "." and self.current_remote_path != path:
             self.remote_history.append(self.current_remote_path)
             self.remote_back_btn.setEnabled(True)
-
-        self.connect_btn.setEnabled(False)
-        self.statusBar().showMessage(f"Connecting to {self.host_input.text()}...")
-        self.worker = SFTPWorker(self.host_input.text(), int(self.port_input.text()), self.user_input.text(), self.pass_input.text(), self.current_key_path, path)
+        self.status_changed.emit(f"Loading {path}...")
+        self.worker = SFTPWorker(self.host, self.port, self.user, self.password, self.key_path, path)
         self.worker.directory_loaded.connect(self.on_directory_loaded)
-        self.worker.error_occurred.connect(self.on_network_error)
+        self.worker.error_occurred.connect(lambda e: QMessageBox.critical(self, "SFTP Error", e))
         self.worker.start()
 
     def on_directory_loaded(self, file_list, current_path):
         self.current_remote_path = current_path
-        host = self.host_input.text()
-        
-        if host not in self.app_settings.get("remote_homes", {}) and self.remote_home_path == ".":
-            self.remote_home_path = current_path
-            
         self.remote_model.removeRows(0, self.remote_model.rowCount())
         self.remote_path_input.setText(current_path)
-        
+
         if current_path != '/':
             up_item = QStandardItem("..")
             up_item.setIcon(self.dir_icon)
-            up_item.setData({'is_dir': True, 'mode': 0}, Qt.ItemDataRole.UserRole)
-            self.remote_model.appendRow(up_item)
-            
+            up_item.setData({'is_dir': True, 'mode': 0, 'uid': 0, 'gid': 0}, Qt.ItemDataRole.UserRole)
+            self.remote_model.appendRow([up_item, QStandardItem(""), QStandardItem("")])
+
         for f in file_list:
-            item = QStandardItem(f['name'])
-            item.setIcon(self.dir_icon if f['is_dir'] else self.file_icon)
-            item.setData({'is_dir': f['is_dir'], 'mode': f['mode']}, Qt.ItemDataRole.UserRole) 
-            self.remote_model.appendRow(item)
-            
-        self.connect_btn.setText("Connected"); self.connect_btn.setStyleSheet("background-color: #10b981;")
-        self.connect_btn.setEnabled(True)
-        self.statusBar().showMessage(f"Connected to {current_path}")
+            name_item = QStandardItem(f['name'])
+            name_item.setIcon(self.dir_icon if f['is_dir'] else self.file_icon)
+            name_item.setData({'is_dir': f['is_dir'], 'mode': f['mode'], 'uid': f['uid'], 'gid': f['gid']}, Qt.ItemDataRole.UserRole)
+            size_str = "<DIR>" if f['is_dir'] else f"{f['size']:,} B"
+            mode_str = stat.filemode(f['mode'])
+            self.remote_model.appendRow([name_item, QStandardItem(size_str), QStandardItem(mode_str)])
 
-    def on_network_error(self, error_msg):
-        self.connect_btn.setEnabled(True); self.connect_btn.setStyleSheet("background-color: #2563eb;")
-        QMessageBox.critical(self, "Error", f"Operation failed:\n{error_msg}")
-
-    def run_remote_command(self, command, target_path, arg=None):
-        self.cmd_worker = RemoteCommandWorker(self.host_input.text(), int(self.port_input.text()), self.user_input.text(), self.pass_input.text(), self.current_key_path, command, target_path, arg)
-        self.cmd_worker.command_finished.connect(lambda: self.load_remote_directory(self.current_remote_path, record_history=False))
-        self.cmd_worker.error_occurred.connect(self.on_network_error)
-        self.cmd_worker.start()
+        self.status_changed.emit(f"Connected: {current_path}")
 
     def on_remote_double_click(self, proxy_index):
         source_index = self.proxy_model.mapToSource(proxy_index)
-        item = self.remote_model.itemFromIndex(source_index)
+        item = self.remote_model.item(source_index.row(), 0)
         data = item.data(Qt.ItemDataRole.UserRole)
-        
         if data['is_dir']:
-            folder_name = item.text()
-            if folder_name == "..": new_path = "/".join(self.current_remote_path.rstrip('/').split('/')[:-1])
-            else: new_path = f"{self.current_remote_path.rstrip('/')}/{folder_name}"
+            folder = item.text()
+            new_path = "/".join(self.current_remote_path.rstrip('/').split('/')[:-1]) if folder == ".." else f"{self.current_remote_path.rstrip('/')}/{folder}"
             self.load_remote_directory(new_path or "/")
         else:
             filename = item.text()
             remote_path = f"{self.current_remote_path.rstrip('/')}/{filename}"
-            self.read_worker = RemoteReadWorker(self.host_input.text(), int(self.port_input.text()), self.user_input.text(), self.pass_input.text(), self.current_key_path, remote_path)
-            self.read_worker.content_loaded.connect(lambda content: self.open_editor(filename, remote_path, content))
-            self.read_worker.error_occurred.connect(self.on_network_error)
+            self.read_worker = RemoteReadWorker(self.host, self.port, self.user, self.password, self.key_path, remote_path)
+            self.read_worker.content_loaded.connect(lambda c: self.open_editor(filename, remote_path, c))
+            self.read_worker.error_occurred.connect(lambda e: QMessageBox.warning(self, "Notice", e))
             self.read_worker.start()
 
     def open_editor(self, filename, remote_path, content):
         dialog = TextEditorDialog(filename, content, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.write_worker = RemoteWriteWorker(self.host_input.text(), int(self.port_input.text()), self.user_input.text(), self.pass_input.text(), self.current_key_path, remote_path, dialog.get_content())
+            self.write_worker = RemoteWriteWorker(self.host, self.port, self.user, self.password, self.key_path, remote_path, dialog.get_content())
             self.write_worker.write_finished.connect(lambda: QMessageBox.information(self, "Success", "File saved."))
-            self.write_worker.error_occurred.connect(self.on_network_error)
+            self.write_worker.error_occurred.connect(lambda e: QMessageBox.critical(self, "Write Error", e))
             self.write_worker.start()
 
     def on_local_context_menu(self, position):
@@ -995,7 +1154,10 @@ class SFCPClient(QMainWindow):
         if action == upload_action and self.current_remote_path != ".":
             self.start_transfer(file_path, f"{self.current_remote_path.rstrip('/')}/{os.path.basename(file_path)}", "upload")
         elif action == set_home_action:
-            self.set_as_local_home(file_path)
+            self.main_app.local_home_path = file_path
+            self.main_app.app_settings["local_home"] = file_path
+            self.main_app.save_settings()
+            QMessageBox.information(self, "Home Set", f"Local home directory set to:\n{file_path}")
 
     def on_files_dropped(self, paths):
         if self.current_remote_path == ".": return
@@ -1009,21 +1171,21 @@ class SFCPClient(QMainWindow):
         new_folder_action = menu.addAction("New Folder")
         download_action, rename_action, delete_action, prop_action, set_home_action = None, None, None, None, None
         item, data = None, None
-        
+
         if proxy_index.isValid():
             source_index = self.proxy_model.mapToSource(proxy_index)
-            item = self.remote_model.itemFromIndex(source_index)
+            item = self.remote_model.item(source_index.row(), 0)
             data = item.data(Qt.ItemDataRole.UserRole)
             if item.text() != "..":
                 menu.addSeparator()
                 download_action = menu.addAction(f"Download {'Folder' if data['is_dir'] else 'File'}")
                 rename_action = menu.addAction("Rename")
-                prop_action = menu.addAction("Properties (chmod)")
+                prop_action = menu.addAction("Properties (chmod / chown)")
                 delete_action = menu.addAction("Delete")
                 if data['is_dir']:
                     menu.addSeparator()
                     set_home_action = menu.addAction("Set as Default Remote Home")
-                
+
         action = menu.exec(self.remote_view.viewport().mapToGlobal(position))
         
         if action == new_folder_action:
@@ -1042,26 +1204,36 @@ class SFCPClient(QMainWindow):
             if QMessageBox.question(self, "Delete", f"Delete {item.text()}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
                 self.run_remote_command('rmdir' if data['is_dir'] else 'rm', f"{self.current_remote_path.rstrip('/')}/{item.text()}")
         elif action == prop_action and item:
-            dialog = PropertiesDialog(item.text(), data['mode'], self)
+            dialog = PropertiesDialog(item.text(), data['mode'], data['uid'], data['gid'], self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
-                self.run_remote_command('chmod', f"{self.current_remote_path.rstrip('/')}/{item.text()}", dialog.get_new_mode())
+                new_mode, new_uid, new_gid = dialog.get_properties()
+                self.run_remote_command('properties', f"{self.current_remote_path.rstrip('/')}/{item.text()}", (new_mode, new_uid, new_gid))
         elif action == set_home_action and item:
             target_path = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
-            self.set_as_remote_home(target_path)
+            if "remote_homes" not in self.main_app.app_settings:
+                self.main_app.app_settings["remote_homes"] = {}
+            self.main_app.app_settings["remote_homes"][self.host] = target_path
+            self.main_app.save_settings()
+            QMessageBox.information(self, "Home Set", f"Remote home directory for '{self.host}' set to:\n{target_path}")
+
+    def run_remote_command(self, cmd, target_path, arg=None):
+        self.cmd_worker = RemoteCommandWorker(self.host, self.port, self.user, self.password, self.key_path, cmd, target_path, arg)
+        self.cmd_worker.command_finished.connect(lambda: self.load_remote_directory(self.current_remote_path, record_history=False))
+        self.cmd_worker.error_occurred.connect(lambda e: QMessageBox.critical(self, "Command Failed", e))
+        self.cmd_worker.start()
 
     def start_transfer(self, local_path, remote_path, direction):
         row = self.queue_model.rowCount()
         self.queue_model.insertRow(row)
-        dir_icon = "⬆" if direction == "upload" else "⬇"
+        dir_icon = "UP" if direction == "upload" else "DOWN"
         self.queue_model.setItem(row, 0, QStandardItem(dir_icon))
         self.queue_model.item(row, 0).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.queue_model.setItem(row, 1, QStandardItem(os.path.basename(local_path)))
         self.queue_model.setItem(row, 2, QStandardItem("Transferring..."))
-        
         pb = QProgressBar(); pb.setValue(0)
         self.queue_table.setIndexWidget(self.queue_model.index(row, 3), pb)
-        
-        worker = TransferWorker(self.host_input.text(), int(self.port_input.text()), self.user_input.text(), self.pass_input.text(), self.current_key_path, local_path, remote_path, direction, row)
+
+        worker = TransferWorker(self.host, self.port, self.user, self.password, self.key_path, local_path, remote_path, direction, row)
         worker.progress_updated.connect(self.update_progress)
         worker.transfer_finished.connect(self.transfer_complete)
         worker.error_occurred.connect(self.transfer_error)
@@ -1077,17 +1249,138 @@ class SFCPClient(QMainWindow):
         self.queue_model.setItem(row, 2, QStandardItem("Done"))
         pb = self.queue_table.indexWidget(self.queue_model.index(row, 3))
         if pb: pb.setValue(100)
-        if self.queue_model.item(row, 0).text() == "⬆":
+        if self.queue_model.item(row, 0).text() == "UP":
             self.load_remote_directory(self.current_remote_path, record_history=False)
-            
+
     def transfer_error(self, row, error_msg):
         self.queue_model.setItem(row, 2, QStandardItem(f"Failed: {error_msg}"))
+
+    def closeEvent(self, event):
+        if self.term_thread:
+            self.term_thread.stop()
+        event.accept()
+
+# ==========================================
+# MAIN WINDOW & TABBED SESSION CONTROLLER
+# ==========================================
+
+class NovaSFTP(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Nova SFTP")
+        self.resize(1380, 940)
+
+        icon_paths = ["/usr/share/icons/hicolor/scalable/apps/nova-sftp.svg", "nova-sftp.svg", "nova-sftp.png"]
+        for p in icon_paths:
+            if os.path.exists(p):
+                self.setWindowIcon(QIcon(p))
+                break
+
+        self.settings_file = os.path.expanduser("~/.config/nova_sftp/settings.json")
+        self.app_settings = self.load_settings()
+        self.local_home_path = self.app_settings.get("local_home", QDir.homePath())
+        if not os.path.exists(self.local_home_path):
+            self.local_home_path = QDir.homePath()
+
+        self.init_ui()
+
+    def load_settings(self):
+        if os.path.exists(self.settings_file):
+            with open(self.settings_file, 'r') as f: return json.load(f)
+        return {}
+
+    def save_settings(self):
+        os.makedirs(os.path.dirname(self.settings_file), exist_ok=True)
+        with open(self.settings_file, 'w') as f: json.dump(self.app_settings, f)
+
+    def init_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Global Top Bar
+        top_bar = QWidget()
+        top_bar.setStyleSheet("background-color: #18181b; border: 1px solid #27272a; border-radius: 6px;")
+        top_layout = QHBoxLayout(top_bar)
+
+        self.bookmarks_btn = QPushButton("Bookmarks")
+        self.bookmarks_btn.setStyleSheet("background-color: #4f46e5;")
+        self.bookmarks_btn.clicked.connect(self.open_bookmarks)
+
+        self.host_input = QLineEdit(); self.host_input.setPlaceholderText("Host/IP")
+        self.port_input = QLineEdit("22"); self.port_input.setFixedWidth(60)
+        self.user_input = QLineEdit(); self.user_input.setPlaceholderText("Username")
+        self.pass_input = QLineEdit(); self.pass_input.setPlaceholderText("Password"); self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+
+        self.key_btn = QToolButton(); self.key_btn.setText("Key"); self.key_btn.clicked.connect(self.browse_key)
+        self.active_key_path = ""
+
+        self.connect_btn = QPushButton("New Connection")
+        self.connect_btn.clicked.connect(self.open_session_tab)
+
+        for w in (self.bookmarks_btn, self.host_input, self.port_input, self.user_input, self.key_btn, self.pass_input, self.connect_btn):
+            top_layout.addWidget(w)
+        main_layout.addWidget(top_bar)
+
+        # Tabbed Sessions Container
+        self.session_tabs = QTabWidget()
+        self.session_tabs.setTabsClosable(True)
+        self.session_tabs.tabCloseRequested.connect(self.close_tab)
+        main_layout.addWidget(self.session_tabs)
+
+        self.statusBar().showMessage("Ready")
+
+    def browse_key(self):
+        file, _ = QFileDialog.getOpenFileName(self, "Select SSH Key", QDir.homePath())
+        if file:
+            self.active_key_path = file
+            self.key_btn.setStyleSheet("background-color: #10b981;")
+
+    def open_bookmarks(self):
+        dialog = SiteManagerDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            site = dialog.get_selected_site()
+            if site['host']:
+                self.host_input.setText(site['host'])
+                self.port_input.setText(str(site['port']))
+                self.user_input.setText(site['user'])
+                self.pass_input.setText(site['password'])
+                self.active_key_path = site['key_path']
+                self.key_btn.setStyleSheet("background-color: #10b981;" if self.active_key_path else "")
+                self.open_session_tab(label=site['name'] or f"{site['user']}@{site['host']}")
+
+    def open_session_tab(self, label=None):
+        host = self.host_input.text().strip()
+        port = int(self.port_input.text().strip() or 22)
+        user = self.user_input.text().strip()
+        pwd = self.pass_input.text()
+        key_path = self.active_key_path
+
+        if not host or not user:
+            QMessageBox.warning(self, "Missing Credentials", "Host and Username are required to establish an SFTP session.")
+            return
+
+        tab_title = label if label else f"{user}@{host}"
+        tab = SessionTab(host, port, user, pwd, key_path, self)
+        tab.status_changed.connect(lambda s: self.statusBar().showMessage(s))
+        idx = self.session_tabs.addTab(tab, tab_title)
+        self.session_tabs.setCurrentIndex(idx)
+
+    def close_tab(self, index):
+        widget = self.session_tabs.widget(index)
+        if widget:
+            if hasattr(widget, 'term_thread') and widget.term_thread:
+                widget.term_thread.stop()
+            widget.deleteLater()
+        self.session_tabs.removeTab(index)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("Nova SFTP")
     app.setDesktopFileName("nova-sftp.desktop")
     app.setStyleSheet(PREMIUM_THEME)
-    window = SFCPClient()
+    window = NovaSFTP()
     window.show()
     sys.exit(app.exec())

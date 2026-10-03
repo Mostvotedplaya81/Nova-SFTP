@@ -1,3 +1,11 @@
+nova-sftp (1.1.0-1) jammy; urgency=medium
+
+  * Major release: Multi-tab sessions, background transfer queue,
+    directory sync engine, interactive embedded terminal, and advanced
+    properties editor.
+
+ -- Nicky <Streamit.litenova.me@gmail.com>  Sat, 03 Oct 2026 18:38:19 +0100
+
 nova-sftp (1.0.1-1) jammy; urgency=medium
 
   * Version bump to 1.0.1 to include official custom SVG icon.
