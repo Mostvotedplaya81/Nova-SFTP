@@ -1,0 +1,5 @@
+nova-sftp (1.0.1-1) jammy; urgency=medium
+
+  * Version bump to 1.0.1 to include official custom SVG icon.
+
+ -- Nicky <Streamit.litenova.me@gmail.com>  Fri, 02 Oct 2026 11:06:35 +0100

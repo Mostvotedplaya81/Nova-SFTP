@@ -1,0 +1,10 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Debian build directories and logs
+debian/nova-sftp/
+debian/.debhelper/
+debian/files
+debian/*.substvars
+debian/*.log

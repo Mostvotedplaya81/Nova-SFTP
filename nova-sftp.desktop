@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Nova SFTP
+Comment=Premium SFTP/SSH Client
+Exec=/usr/bin/nova-sftp
+Icon=nova-sftp
+Terminal=false
+Categories=Network;FileTransfer;Utility;

@@ -1,0 +1,13 @@
+Source: nova-sftp
+Section: net
+Priority: optional
+Maintainer: Nicky <Streamit.litenova.me@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+
+Package: nova-sftp
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-pip, gnome-terminal | x-terminal-emulator
+Description: Premium SFTP and SSH Client
+ Nova SFTP is a dual-pane SFTP file browser with an integrated
+ code editor and native terminal launcher.
