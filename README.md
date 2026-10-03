@@ -104,5 +104,3 @@ debuild -S -sa
 This project is licensed under the MIT License — see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
 
 ---
-
-Would you like to include specific connection options (such as SSH proxy jumps or key-file flags) in the configuration section?
