@@ -1,4 +1,3 @@
-```markdown
 # Nova SFTP
 
 Nova SFTP is a fast, lightweight, and modern desktop SFTP client built natively for Linux. Designed with a clean dark-mode interface, Nova SFTP simplifies remote server management, file transfers, and directory synchronization over secure SSH connections.
@@ -7,12 +6,12 @@ Nova SFTP is a fast, lightweight, and modern desktop SFTP client built natively 
 
 ## Features
 
-- **Dual-Pane Navigation:** Browse local directories alongside remote server filesystems seamlessly.
-- **Secure SSH/SFTP Support:** Connect safely using password authentication or SSH key pairs (RSA, Ed25519).
-- **Background Transfers:** Queue large file and directory uploads/downloads without freezing the interface.
-- **Remote File Management:** Create, rename, edit permissions (`chmod`), and delete files directly on remote machines.
-- **Session Bookmarks:** Save frequently accessed servers with port, username, and custom configurations for fast reconnects.
-- **Native Desktop Integration:** Full system menu integration with custom application iconography and desktop environment compliance.
+* **Dual-Pane Navigation:** Browse local directories alongside remote server filesystems seamlessly.
+* **Secure SSH/SFTP Support:** Connect safely using password authentication or SSH key pairs (RSA, Ed25519).
+* **Background Transfers:** Queue large file and directory uploads/downloads without freezing the interface.
+* **Remote File Management:** Create, rename, edit permissions (`chmod`), and delete files directly on remote machines.
+* **Session Bookmarks:** Save frequently accessed servers with port, username, and custom configurations for fast reconnects.
+* **Native Desktop Integration:** Full system menu integration with custom application iconography and desktop environment compliance.
 
 ---
 
@@ -64,7 +63,7 @@ sudo apt install python3 python3-pip python3-pyqt6
 
 1. **Clone the repository:**
 ```bash
-git clone [https://github.com/Mostvotedplaya81/Nova-SFTP.git](https://github.com/Mostvotedplaya81/Nova-SFTP.git)
+git clone https://github.com/Mostvotedplaya81/Nova-SFTP.git
 cd Nova-SFTP
 
 ```
@@ -104,4 +103,6 @@ debuild -S -sa
 
 This project is licensed under the MIT License — see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
 
-```
+---
+
+Would you like to include specific connection options (such as SSH proxy jumps or key-file flags) in the configuration section?
