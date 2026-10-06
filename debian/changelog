@@ -1,13 +1,14 @@
-nova-sftp (1.1.0-1) jammy; urgency=medium
+nova-sftp (1.2.0-2) jammy; urgency=medium
 
-  * Major release: Multi-tab sessions, background transfer queue,
-    directory sync engine, interactive embedded terminal, and advanced
-    properties editor.
+  * Packaging fix: Updated debian/install to target the new PNG icon.
 
- -- Nicky <Streamit.litenova.me@gmail.com>  Sat, 03 Oct 2026 18:38:19 +0100
+ -- Nicky <Streamit.litenova.me@gmail.com>  Tue, 06 Oct 2026 18:10:00 +0100
 
-nova-sftp (1.0.1-1) jammy; urgency=medium
+nova-sftp (1.2.0-1) jammy; urgency=medium
 
-  * Version bump to 1.0.1 to include official custom SVG icon.
+  * The Visual Polish & Custom Commands Release.
+  * Fixed QMessageBox UI clipping and scaling constraints.
+  * Integrated right-click custom commands (Zip/Unzip, Tar/Untar).
+  * Updated system application icon to a rounded macOS-style PNG.
 
- -- Nicky <Streamit.litenova.me@gmail.com>  Fri, 02 Oct 2026 11:06:35 +0100
+ -- Nicky <Streamit.litenova.me@gmail.com>  Tue, 06 Oct 2026 10:15:00 +0100

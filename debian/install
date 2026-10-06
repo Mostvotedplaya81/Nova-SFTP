@@ -1,4 +1,4 @@
 main.py usr/share/nova-sftp
-nova-sftp.svg usr/share/icons/hicolor/scalable/apps
+nova-sftp.png usr/share/icons/hicolor/scalable/apps
 nova-sftp.desktop usr/share/applications
 nova-sftp usr/bin
