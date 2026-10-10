@@ -1,13 +1,31 @@
+nova-sftp (1.3.0-2) jammy; urgency=medium
+
+  * Phase 1 & 2 Complete: Added Integrated Sidebar, Command Palette, and Live Logs.
+  * Hardened Sync Engine: Added explicit config dialog and abort controls.
+  * Added individual file transfer cancellation via queue context menu.
+
+ -- Nicky <Streamit.litenova.me@gmail.com>  Fri, 09 Oct 2026 06:15:00 +0100
+
+nova-sftp (1.3.0-1) jammy; urgency=medium
+
+  * Added Advanced Text Editor with search, replace, and dynamic text scaling.
+
+ -- Nicky <Streamit.litenova.me@gmail.com>  Thu, 08 Oct 2026 07:30:00 +0100
+
 nova-sftp (1.2.0-2) jammy; urgency=medium
 
   * Packaging fix: Updated debian/install to target the new PNG icon.
 
- -- Nicky <Streamit.litenova.me@gmail.com>  Tue, 06 Oct 2026 18:10:00 +0100
+ -- Nicky <Streamit.litenova.me@gmail.com>  Tue, 06 Oct 2026 17:45:00 +0100
 
 nova-sftp (1.2.0-1) jammy; urgency=medium
 
   * The Visual Polish & Custom Commands Release.
   * Fixed QMessageBox UI clipping and scaling constraints.
+  * Added human-readable file sizes and relative timestamps.
+  * Implemented dynamically colorized file type iconography.
+  * Overhauled transfer queue with live tab badges and color-coded pills.
+  * Added persistent session memory for window size and splitters.
   * Integrated right-click custom commands (Zip/Unzip, Tar/Untar).
   * Updated system application icon to a rounded macOS-style PNG.
 
