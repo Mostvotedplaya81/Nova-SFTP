@@ -1,25 +1,36 @@
 # Nova SFTP
 
-Nova SFTP is a fast, lightweight, and modern desktop SFTP client built natively for Linux. Designed with a clean dark-mode interface, Nova SFTP simplifies remote server management, file transfers, and directory synchronization over secure SSH connections.
+**Nova SFTP** is a high-performance, purely asynchronous desktop SFTP and SSH client built natively for Linux with **PyQt6**, **asyncssh**, and **qasync**. Designed for system administrators and developers, it combines dual-pane file management, real-time directory synchronization, live log tailing, and an integrated code editor over a single multiplexed SSH tunnel.
 
 ---
 
-## Features
+## What's New in v1.4.0
 
-* **Dual-Pane Navigation:** Browse local directories alongside remote server filesystems seamlessly.
-* **Secure SSH/SFTP Support:** Connect safely using password authentication or SSH key pairs (RSA, Ed25519).
-* **Background Transfers:** Queue large file and directory uploads/downloads without freezing the interface.
-* **Remote File Management:** Create, rename, edit permissions (`chmod`), and delete files directly on remote machines.
-* **Session Bookmarks:** Save frequently accessed servers with port, username, and custom configurations for fast reconnects.
-* **Native Desktop Integration:** Full system menu integration with custom application iconography and desktop environment compliance.
+* **Pure Asynchronous Engine (`qasync` + `asyncssh`):** Completely replaced legacy blocking threads with non-blocking `asyncio` coroutines for zero-latency UI responsiveness during heavy transfers.
+* **Multiplexed SSH Tunnels:** File browsing, concurrent transfers, interactive terminal sessions, and live log streams all share a single persistent SSH connection per tab.
+* **Dynamic Theme Switcher:** Switch instantly between **Midnight Dark**, **Clean Light**, **Dracula**, and **Monokai** via the toolbar dropdown or Command Palette without restarting.
+* **Command Palette (`Ctrl+P`):** Quickly launch bookmarked servers, switch themes, open tabs, or jump directly to Live Logs from the keyboard.
+* **Enhanced Code Editor & Quick Look:** Press `Spacebar` on any remote file for an instant syntax-highlighted Quick Look preview, or double-click to open the full editor with line numbers, Find & Replace (with auto-centering viewport), and dynamic text zoom.
+* **Live Sync & Directory Comparison:** Watch local directories with `watchdog` to automatically push saved changes in real time, or run full bi-directional directory sync scans.
+* **Live Log Tailing & Interactive Terminal:** Stream `syslog`, `auth.log`, `nginx` logs, `journalctl -f`, or `docker logs` directly inside a dedicated tab alongside an embedded interactive shell.
+
+---
+
+## Key Features
+
+* **Multi-Tab Sessions:** Manage multiple remote servers simultaneously in isolated tabs with persistent layout and splitter memory.
+* **Secure Authentication:** Connect via password or SSH private keys (with system keyring integration via `keyring`).
+* **Concurrent Transfer Queue:** Upload and download files or recursive directories in parallel with real-time progress bars, active queue tab badges, and individual transfer cancellation.
+* **Remote Context Actions:** Manage permissions (`chmod` / `chown` with recursive `-R` support), create/rename/delete folders, and compress/extract `.tar.gz` and `.zip` archives directly on the remote host.
+* **Colorized File Iconography:** Automatically highlights code files, archives, media, images, and logs with distinct visual accents and human-readable sizes/relative timestamps.
 
 ---
 
 ## Installation
 
-### Ubuntu & Debian (via Launchpad PPA)
+### Ubuntu & Debian (via Official Launchpad PPA)
 
-Install Nova SFTP and receive automatic updates through the official Launchpad Personal Package Archive:
+Install Nova SFTP and receive automatic updates through the Launchpad Personal Package Archive:
 
 ```bash
 # Add the Nova SFTP PPA
@@ -30,77 +41,11 @@ sudo apt update
 
 # Install Nova SFTP
 sudo apt install nova-sftp
-
-```
-
-To launch the application:
-
-* Search for **Nova SFTP** in your application launcher (Super/Windows key).
-* Or run it directly from the terminal:
-```bash
-nova-sftp
-
-```
-
-
-
----
-
-## Running from Source
-
-If you prefer to run the development version or build the application manually:
-
-### Prerequisites
-
-Ensure you have Python 3.10+ and the required development dependencies installed:
-
-```bash
-sudo apt install python3 python3-pip python3-pyqt6
-
-```
-
-### Setup & Launch
-
-1. **Clone the repository:**
-```bash
-git clone https://github.com/Mostvotedplaya81/Nova-SFTP.git
+To launch the application:Search for Nova SFTP in your system application launcher.Or run it directly from your terminal:Bashnova-sftp
+Running from SourcePrerequisitesEnsure you have Python 3.10+ and pip installed on your system:Bashsudo apt install python3 python3-pip python3-pyqt6
+Setup & LaunchClone the repository:Bashgit clone [https://github.com/Mostvotedplaya81/Nova-SFTP.git](https://github.com/Mostvotedplaya81/Nova-SFTP.git)
 cd Nova-SFTP
-
-```
-
-
-2. **Install Python dependencies:**
-```bash
-pip install -r requirements.txt
-
-```
-
-
-*(Or install the core libraries manually: `pip install PyQt6 paramiko`)*
-3. **Run the application:**
-```bash
-python3 main.py
-
-```
-
-
-
----
-
-## Packaging & Distribution
-
-This repository contains full Debian packaging rules inside the `debian/` directory. To build source packages for Launchpad or Debian archives locally:
-
-```bash
-# Build source package without binary compilation
-debuild -S -sa
-
-```
-
----
-
-## License
-
-This project is licensed under the GNU GPL v3 License — see the [LICENSE](https://www.google.com/search?q=LICENSE) file for details.
-
----
+Install Python dependencies:(Nova SFTP will automatically check for and install missing Python packages on first run, or you can install them manually):Bashpip install PyQt6 asyncssh qasync keyring watchdog
+Run the application:Bashpython3 main.py
+Keyboard ShortcutsShortcutActionCtrl + POpen the Command PaletteSpacebarQuick Look preview on selected remote fileEnter (in Editor Find)Jump to next match and center in viewportPackaging & DistributionThis repository contains full Debian packaging rules inside the debian/ directory. To build a signed source package locally for Launchpad:Bashdebuild -S -sd -i -I
+LicenseThis project is licensed under the GNU General Public License v3.0 — see the LICENSE file for details.EOF
