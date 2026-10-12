@@ -1,0 +1,38 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies & PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt6 asyncssh qasync keyring watchdog pillow pyinstaller
+
+      - name: Convert PNG Icon to ICO
+        run: |
+          python -c "from PIL import Image; img = Image.open('nova-sftp.png'); img.save('nova-sftp.ico', sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])"
+
+      - name: Build Standalone EXE with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onedir --windowed --icon="nova-sftp.ico" --add-data "nova-sftp.ico;." --add-data "nova-sftp.png;." --hidden-import="keyring.backends.Windows" --name="Nova-SFTP" main.py
+
+      - name: Upload Windows Portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nova-SFTP-Windows-x64
+          path: dist/Nova-SFTP/
