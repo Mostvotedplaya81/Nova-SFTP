@@ -1,3 +1,11 @@
+nova-sftp (1.4.0-2) jammy; urgency=medium
+
+  * Fixed context menu dismissal guard clauses to prevent unintended actions.
+  * Restored Live Sync file modification handler.
+  * Centered search matches in the code editor viewport and refined line highlighting.
+
+ -- Nicky <Streamit.litenova.me@gmail.com>  Mon, 12 Oct 2026 08:48:00 +0100
+
 nova-sftp (1.4.0-1) jammy; urgency=medium
 
   * Phase 3 Complete: The Async Engine Rewrite.

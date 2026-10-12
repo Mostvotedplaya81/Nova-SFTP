@@ -751,12 +751,13 @@ class CodeEditor(QPlainTextEdit):
     def highlightCurrentLine(self):
         extraSelections = []
         if not self.isReadOnly():
-            selection = QTextEdit.ExtraSelection()
-            selection.format.setBackground(QColor("#27272a"))
-            selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
-            selection.cursor = self.textCursor()
-            selection.cursor.clearSelection()
-            extraSelections.append(selection)
+            cursor = self.textCursor()
+            if not cursor.hasSelection():
+                selection = QTextEdit.ExtraSelection()
+                selection.format.setBackground(QColor("#27272a"))
+                selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+                selection.cursor = cursor
+                extraSelections.append(selection)
         self.setExtraSelections(extraSelections)
 
     def lineNumberAreaPaintEvent(self, event):
@@ -796,6 +797,7 @@ class AdvancedTextEditor(QWidget):
         
         self.find_input = QLineEdit()
         self.find_input.setPlaceholderText("Find...")
+        self.find_input.returnPressed.connect(self.find_text)
         self.replace_input = QLineEdit()
         self.replace_input.setPlaceholderText("Replace with...")
         
@@ -836,11 +838,17 @@ class AdvancedTextEditor(QWidget):
 
     def find_text(self):
         text = self.find_input.text()
-        if text:
+        if not text:
+            return
+            
+        found = self.editor.find(text)
+        if not found:
+            self.editor.moveCursor(QTextCursor.MoveOperation.Start)
             found = self.editor.find(text)
-            if not found:
-                self.editor.moveCursor(QTextCursor.MoveOperation.Start)
-                self.editor.find(text)
+            
+        if found:
+            self.editor.centerCursor()
+            self.editor.setFocus()
 
     def replace_text(self):
         cursor = self.editor.textCursor()
