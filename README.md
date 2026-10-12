@@ -1,6 +1,3 @@
-Copy the block below and paste it directly into your README.md file:
-Markdown
-
 # Nova SFTP
 
 **Nova SFTP** is a high-performance, purely asynchronous desktop SFTP and SSH client built natively for Linux with **PyQt6**, **asyncssh**, and **qasync**[cite: 1, 2]. Designed for system administrators and developers, it combines dual-pane file management, real-time directory synchronization, live log tailing, and an integrated code editor over a single multiplexed SSH tunnel[cite: 1, 2].
