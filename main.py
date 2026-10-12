@@ -11,7 +11,9 @@ import importlib.util
 import asyncio
 
 def ensure_dependencies():
-    """Installs required packages on first run if missing."""
+    """Installs required packages on first run if missing (skipped in compiled binaries)."""
+    if getattr(sys, 'frozen', False):
+        return
     dependencies = ['PyQt6', 'asyncssh', 'keyring', 'watchdog', 'qasync']
     missing = [req for req in dependencies if importlib.util.find_spec(req) is None]
     if missing:
@@ -52,6 +54,12 @@ from PyQt6.QtCore import (
     QDir, Qt, pyqtSignal, QSortFilterProxyModel, QRect, QSize, 
     QRegularExpression, QByteArray
 )
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller."""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
 
 # ==========================================
 # MODERN UI THEMES
@@ -891,7 +899,7 @@ class AdvancedTextEditor(QWidget):
                 color: {text};
                 border: none;
                 selection-background-color: {sel};
-                font-family: "Fira Code", monospace;
+                font-family: "Fira Code", "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace;
                 font-size: {self.current_font_size}px;
             }}
         """)
@@ -1054,7 +1062,7 @@ class SessionTab(QWidget):
 
         self.local_view = QTreeView()
         self.local_model = QFileSystemModel()
-        self.local_model.setRootPath(QDir.rootPath())
+        self.local_model.setRootPath("")
         self.local_view.setModel(self.local_model)
         self.local_view.setRootIndex(self.local_model.index(self.main_app.local_home_path))
         
@@ -1167,12 +1175,12 @@ class SessionTab(QWidget):
         term_layout = QVBoxLayout(term_widget); term_layout.setContentsMargins(5, 5, 5, 5)
         self.term_display = QPlainTextEdit()
         self.term_display.setReadOnly(True)
-        self.term_display.setStyleSheet("background-color: #0c0a09; color: #4ade80; font-family: monospace; font-size: 13px; border: 1px solid #27272a; border-radius: 6px;")
+        self.term_display.setStyleSheet('background-color: #0c0a09; color: #4ade80; font-family: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace; font-size: 13px; border: 1px solid #27272a; border-radius: 6px;')
         term_input_layout = QHBoxLayout()
         term_prompt = QLabel("$ ")
-        term_prompt.setStyleSheet("color: #38bdf8; font-weight: bold; font-family: monospace;")
+        term_prompt.setStyleSheet('color: #38bdf8; font-weight: bold; font-family: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace;')
         self.term_input = QLineEdit()
-        self.term_input.setStyleSheet("background-color: #18181b; color: #f4f4f5; font-family: monospace; border-radius: 6px;")
+        self.term_input.setStyleSheet('background-color: #18181b; color: #f4f4f5; font-family: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace; border-radius: 6px;')
         self.term_input.returnPressed.connect(self.send_terminal_cmd)
         term_send_btn = QPushButton("Send")
         term_send_btn.clicked.connect(self.send_terminal_cmd)
@@ -1195,7 +1203,7 @@ class SessionTab(QWidget):
         sync_log_layout.setContentsMargins(0, 0, 0, 0)
         self.sync_log_view = QPlainTextEdit()
         self.sync_log_view.setReadOnly(True)
-        self.sync_log_view.setStyleSheet("background-color: #0c0a09; color: #e4e4e7; font-family: monospace; font-size: 12px; border-radius: 0px;")
+        self.sync_log_view.setStyleSheet('background-color: #0c0a09; color: #e4e4e7; font-family: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace; font-size: 12px; border-radius: 0px;')
         
         self.cancel_sync_btn = QPushButton("Abort Sync Scan")
         self.cancel_sync_btn.setStyleSheet("background-color: #ef4444; border-radius: 0px; color: white;")
@@ -1252,7 +1260,7 @@ class SessionTab(QWidget):
 
         self.log_display = QPlainTextEdit()
         self.log_display.setReadOnly(True)
-        self.log_display.setStyleSheet("background-color: #0c0a09; color: #fbbf24; font-family: monospace; font-size: 12px; border: 1px solid #27272a; border-radius: 6px;")
+        self.log_display.setStyleSheet('background-color: #0c0a09; color: #fbbf24; font-family: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace; font-size: 12px; border: 1px solid #27272a; border-radius: 6px;')
 
         logs_layout.addLayout(log_ctrl_layout)
         logs_layout.addWidget(self.log_display)
@@ -1475,8 +1483,8 @@ class SessionTab(QWidget):
     def open_sync_dialog(self):
         local = self.local_path_input.text()
         remote = self.current_remote_path
-        if remote in ['.', '']:
-            QMessageBox.warning(self, "Warning", "Please navigate to a valid remote directory first.")
+        if remote in ['.', ''] or not os.path.isdir(local):
+            QMessageBox.warning(self, "Warning", "Please navigate to valid local and remote directories first.")
             return
             
         dialog = SyncConfigDialog(local, remote, self)
@@ -1703,6 +1711,17 @@ class SessionTab(QWidget):
         self.update_queue_badge()
 
     def set_local_path(self, target_path, record_history=True):
+        # Allow empty string "" on Windows to view all mounted Drives ("My Computer")
+        if target_path == "":
+            curr = self.local_path_input.text()
+            if record_history and curr != "":
+                self.local_history.append(curr)
+                self.local_back_btn.setEnabled(True)
+            self.local_view.setRootIndex(self.local_model.index(""))
+            self.local_path_input.setText("")
+            return
+
+        target_path = os.path.normpath(target_path)
         if not os.path.exists(target_path): return
         curr = self.local_path_input.text()
         if record_history and curr != target_path:
@@ -1718,12 +1737,18 @@ class SessionTab(QWidget):
             self.set_local_path(prev, record_history=False)
 
     def go_local_up(self):
-        curr = self.local_path_input.text()
-        parent = os.path.dirname(curr.rstrip(os.sep))
-        if parent and os.path.exists(parent): self.set_local_path(parent)
+        curr = self.local_path_input.text().strip()
+        if not curr:
+            return
+        qdir = QDir(curr)
+        if qdir.cdUp():
+            self.set_local_path(os.path.normpath(qdir.absolutePath()))
+        elif sys.platform == "win32":
+            # Step out of C:\ to the Windows drive selection view
+            self.set_local_path("")
 
     def go_local_home(self): self.set_local_path(self.main_app.local_home_path)
-    def on_local_path_entered(self): self.set_local_path(self.local_path_input.text())
+    def on_local_path_entered(self): self.set_local_path(self.local_path_input.text().strip())
     def on_local_double_click(self, index):
         if self.local_model.isDir(index): self.set_local_path(self.local_model.filePath(index))
 
@@ -1867,7 +1892,8 @@ class SessionTab(QWidget):
         elif action == download_action and item:
             local_idx = self.local_view.currentIndex()
             local_dir = self.local_model.filePath(local_idx) if local_idx.isValid() else QDir.homePath()
-            if not os.path.isdir(local_dir): local_dir = os.path.dirname(local_dir)
+            if not local_dir or not os.path.isdir(local_dir):
+                local_dir = os.path.dirname(local_dir) if local_dir else QDir.homePath()
             self.start_transfer(os.path.join(local_dir, item.text()), f"{self.current_remote_path.rstrip('/')}/{item.text()}", "download")
         elif action == rename_action and item:
             new_name, ok = QInputDialog.getText(self, "Rename", "Enter new name:", text=item.text())
@@ -1946,7 +1972,15 @@ class NovaSFTP(QMainWindow):
         self.setWindowTitle("Nova SFTP")
         self.resize(1380, 940)
 
-        icon_paths = ["/usr/share/icons/hicolor/scalable/apps/nova-sftp.svg", "nova-sftp.svg", "nova-sftp.png"]
+        icon_paths = [
+            resource_path("nova-sftp.ico"),
+            resource_path("nova-sftp.png"),
+            resource_path("nova-sftp.svg"),
+            "/usr/share/icons/hicolor/scalable/apps/nova-sftp.png",
+            "/usr/share/icons/hicolor/scalable/apps/nova-sftp.svg",
+            "nova-sftp.png",
+            "nova-sftp.svg"
+        ]
         for p in icon_paths:
             if os.path.exists(p):
                 self.setWindowIcon(QIcon(p))
@@ -1954,9 +1988,9 @@ class NovaSFTP(QMainWindow):
 
         self.settings_file = os.path.expanduser("~/.config/nova_sftp/settings.json")
         self.app_settings = self.load_settings()
-        self.local_home_path = self.app_settings.get("local_home", QDir.homePath())
+        self.local_home_path = os.path.normpath(self.app_settings.get("local_home", QDir.homePath()))
         if not os.path.exists(self.local_home_path):
-            self.local_home_path = QDir.homePath()
+            self.local_home_path = os.path.normpath(QDir.homePath())
 
         self.saved_sidebar_width = 250
         
@@ -2170,6 +2204,11 @@ class NovaSFTP(QMainWindow):
         event.accept()
 
 if __name__ == "__main__":
+    # Ensure Windows taskbar groups the icon properly instead of showing Python's icon
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("litenova.novasftp.client.1.4")
+
     app = QApplication(sys.argv)
     app.setApplicationName("Nova SFTP")
     app.setDesktopFileName("nova-sftp")
