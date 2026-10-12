@@ -32,7 +32,7 @@
 
 Install Nova SFTP and receive automatic updates through the Launchpad Personal Package Archive:
 
-```bash
+``bash
 # Add the Nova SFTP PPA
 sudo add-apt-repository ppa:mostvotedplaya/ppa
 
