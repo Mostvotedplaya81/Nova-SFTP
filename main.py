@@ -1510,6 +1510,12 @@ class SessionTab(QWidget):
                 self.live_sync_observer = None
             self.sync_log_view.appendPlainText("--- Live Sync Stopped ---")
 
+    async def on_live_file_changed(self, local_filepath):
+        filename = os.path.basename(local_filepath)
+        remote_filepath = f"{self.current_remote_path.rstrip('/')}/{filename}"
+        self.sync_log_view.appendPlainText(f"[Auto-Sync] Pushing changed file: {filename}")
+        self.start_transfer(local_filepath, remote_filepath, "upload")
+
     @asyncSlot()
     async def trigger_quick_look(self, filename):
         remote_path = f"{self.current_remote_path.rstrip('/')}/{filename}"
@@ -1618,12 +1624,13 @@ class SessionTab(QWidget):
         row = index.row()
         
         status_item = self.queue_model.item(row, 2)
-        if status_item and status_item.text() in ["Done", "Cancelled"] or status_item.text().startswith("Failed"):
+        if status_item and (status_item.text() in ["Done", "Cancelled"] or status_item.text().startswith("Failed")):
             return
             
         menu = QMenu()
         cancel_action = menu.addAction("Cancel Transfer")
         action = menu.exec(self.queue_table.viewport().mapToGlobal(position))
+        if not action: return
         
         if action == cancel_action:
             task = self.transfer_tasks.get(row)
@@ -1789,6 +1796,7 @@ class SessionTab(QWidget):
             set_home_action = menu.addAction("Set as Default Local Home")
             
         action = menu.exec(self.local_view.viewport().mapToGlobal(position))
+        if not action: return
         
         if action == upload_action and self.current_remote_path != ".":
             self.start_transfer(file_path, f"{self.current_remote_path.rstrip('/')}/{os.path.basename(file_path)}", "upload")
@@ -1842,6 +1850,7 @@ class SessionTab(QWidget):
                     set_home_action = menu.addAction("Set as Default Remote Home")
 
         action = menu.exec(self.remote_view.viewport().mapToGlobal(position))
+        if not action: return
         
         if action == new_folder_action:
             name, ok = QInputDialog.getText(self, "New Folder", "Enter folder name:")
