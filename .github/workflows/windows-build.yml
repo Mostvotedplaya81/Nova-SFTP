@@ -37,8 +37,8 @@ jobs:
       - name: Publish to GitHub Releases Page
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4.0
-          name: "Nova SFTP v1.4.0 (Windows & Linux)"
+          tag_name: v1.4.0-3
+          name: "Nova SFTP v1.4.0-3"
           files: dist/Nova-SFTP.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
