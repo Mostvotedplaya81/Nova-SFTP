@@ -1,3 +1,15 @@
+nova-sftp (1.4.0-3) jammy; urgency=medium
+
+  * Fixed PyQt6 integer casting bug preventing spacebar Quick Look execution.
+  * Added configurable port input to sidebar bookmarks.
+  * Wrapped sidebar bookmarks layout in a QScrollArea for small screens.
+  * Added password visibility toggle icons for Quick Connect and Bookmarks.
+  * Added System Tray integration to keep Live Sync running quietly.
+  * Implemented auto-resume logic for interrupted file transfers.
+  * Reduced default window height to safely accommodate Windows UI scaling.
+
+ -- Nicky <Streamit.litenova.me@gmail.com>  Tue, 13 Oct 2026 09:15:00 +0100
+
 nova-sftp (1.4.0-2) jammy; urgency=medium
 
   * Fixed context menu dismissal guard clauses to prevent unintended actions.

@@ -43,7 +43,8 @@ from PyQt6.QtWidgets import (
     QTreeView, QSplitter, QTableView, QLabel, QLineEdit, QPushButton,
     QMessageBox, QMenu, QProgressBar, QHeaderView, QDialog, QListWidget,
     QFormLayout, QInputDialog, QTextEdit, QStyle, QFileDialog, QToolButton,
-    QTabWidget, QCheckBox, QPlainTextEdit, QComboBox, QFrame
+    QTabWidget, QCheckBox, QPlainTextEdit, QComboBox, QFrame, QSystemTrayIcon,
+    QScrollArea
 )
 from PyQt6.QtGui import (
     QFileSystemModel, QStandardItemModel, QStandardItem, QIntValidator, QIcon,
@@ -77,8 +78,9 @@ QComboBox QAbstractItemView { background-color: #09090b; color: #e4e4e7; selecti
 QPushButton { background-color: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; }
 QPushButton:hover { background-color: #6366f1; }
 QPushButton:disabled { background-color: #27272a; color: #71717a; }
-QToolButton.nav-btn { background-color: #27272a; color: #e4e4e7; border: 1px solid #3f3f46; border-radius: 6px; padding: 4px; min-width: 32px; max-width: 32px; min-height: 30px; max-height: 30px; }
-QToolButton.nav-btn:hover { background-color: #3f3f46; color: #ffffff; border-color: #52525b; }
+QToolButton { background-color: #27272a; color: #e4e4e7; border: 1px solid #3f3f46; border-radius: 6px; padding: 4px; }
+QToolButton:hover { background-color: #3f3f46; color: #ffffff; border-color: #52525b; }
+QToolButton.nav-btn { min-width: 32px; max-width: 32px; min-height: 30px; max-height: 30px; }
 QToolButton.nav-btn:disabled { background-color: #18181b; border-color: #27272a; }
 QMenu { background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 4px; }
 QMenu::item { padding: 6px 24px; border-radius: 4px; }
@@ -108,8 +110,9 @@ QComboBox QAbstractItemView { background-color: #ffffff; color: #0f172a; selecti
 QPushButton { background-color: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; }
 QPushButton:hover { background-color: #2563eb; }
 QPushButton:disabled { background-color: #e2e8f0; color: #94a3b8; }
-QToolButton.nav-btn { background-color: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; min-width: 32px; max-width: 32px; min-height: 30px; max-height: 30px; }
-QToolButton.nav-btn:hover { background-color: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+QToolButton { background-color: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; }
+QToolButton:hover { background-color: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+QToolButton.nav-btn { min-width: 32px; max-width: 32px; min-height: 30px; max-height: 30px; }
 QToolButton.nav-btn:disabled { background-color: #f8fafc; border-color: #e2e8f0; color: #cbd5e1;}
 QMenu { background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px; }
 QMenu::item { padding: 6px 24px; border-radius: 4px; }
@@ -139,8 +142,9 @@ QComboBox QAbstractItemView { background-color: #1e1f29; color: #f8f8f2; selecti
 QPushButton { background-color: #bd93f9; color: #282a36; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; }
 QPushButton:hover { background-color: #ff79c6; color: #282a36; }
 QPushButton:disabled { background-color: #44475a; color: #6272a4; }
-QToolButton.nav-btn { background-color: #44475a; color: #f8f8f2; border: 1px solid #6272a4; border-radius: 6px; padding: 4px; min-width: 32px; max-width: 32px; min-height: 30px; max-height: 30px; }
-QToolButton.nav-btn:hover { background-color: #6272a4; color: #ffffff; border-color: #bd93f9; }
+QToolButton { background-color: #44475a; color: #f8f8f2; border: 1px solid #6272a4; border-radius: 6px; padding: 4px; }
+QToolButton:hover { background-color: #6272a4; color: #ffffff; border-color: #bd93f9; }
+QToolButton.nav-btn { min-width: 32px; max-width: 32px; min-height: 30px; max-height: 30px; }
 QToolButton.nav-btn:disabled { background-color: #282a36; border-color: #44475a; color: #6272a4; }
 QMenu { background-color: #282a36; border: 1px solid #44475a; border-radius: 6px; padding: 4px; }
 QMenu::item { padding: 6px 24px; border-radius: 4px; }
@@ -170,8 +174,9 @@ QComboBox QAbstractItemView { background-color: #1e1f1c; color: #f8f8f2; selecti
 QPushButton { background-color: #f92672; color: #f8f8f2; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; }
 QPushButton:hover { background-color: #ff5995; }
 QPushButton:disabled { background-color: #3e3d32; color: #75715e; }
-QToolButton.nav-btn { background-color: #3e3d32; color: #f8f8f2; border: 1px solid #75715e; border-radius: 6px; padding: 4px; min-width: 32px; max-width: 32px; min-height: 30px; max-height: 30px; }
-QToolButton.nav-btn:hover { background-color: #75715e; color: #ffffff; border-color: #f92672; }
+QToolButton { background-color: #3e3d32; color: #f8f8f2; border: 1px solid #75715e; border-radius: 6px; padding: 4px; }
+QToolButton:hover { background-color: #75715e; color: #ffffff; border-color: #f92672; }
+QToolButton.nav-btn { min-width: 32px; max-width: 32px; min-height: 30px; max-height: 30px; }
 QToolButton.nav-btn:disabled { background-color: #272822; border-color: #3e3d32; color: #75715e; }
 QMenu { background-color: #272822; border: 1px solid #3e3d32; border-radius: 6px; padding: 4px; }
 QMenu::item { padding: 6px 24px; border-radius: 4px; }
@@ -188,7 +193,6 @@ QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #75715e; bor
 QCheckBox::indicator:checked { background: #f92672; border-color: #f92672; }
 QSplitter::handle { background-color: transparent; }
 """
-
 
 # ==========================================
 # FORMATTING & ICON HELPERS
@@ -259,10 +263,8 @@ class LocalChangeHandler(FileSystemEventHandler):
 
     def _handle_event(self, path):
         current_time = time.time()
-        # Debounce rapid back-to-back save events from IDEs
         if current_time - self.last_triggered.get(path, 0) > 1.5:
             self.last_triggered[path] = current_time
-            # Thread-safe handoff back to the qasync main loop
             self.loop.call_soon_threadsafe(lambda: asyncio.create_task(self.callback(path)))
 
 # ==========================================
@@ -426,13 +428,35 @@ class SidebarWidget(QWidget):
         
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Site Alias")
+        
         self.host_input = QLineEdit()
         self.host_input.setPlaceholderText("IP or Domain")
+        
+        self.port_input = QLineEdit("22")
+        self.port_input.setPlaceholderText("Port")
+        self.port_input.setFixedWidth(60)
+        
+        host_layout = QHBoxLayout()
+        host_layout.setContentsMargins(0, 0, 0, 0)
+        host_layout.addWidget(self.host_input)
+        host_layout.addWidget(self.port_input)
+        
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Username")
+        
+        pass_layout = QHBoxLayout()
+        pass_layout.setContentsMargins(0, 0, 0, 0)
         self.pass_input = QLineEdit()
         self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.pass_input.setPlaceholderText("Password / Phrase")
+        
+        self.pass_toggle_btn = QToolButton()
+        self.pass_toggle_btn.setText("👁")
+        self.pass_toggle_btn.setCheckable(True)
+        self.pass_toggle_btn.setToolTip("Toggle Password Visibility")
+        self.pass_toggle_btn.clicked.connect(lambda: self.pass_input.setEchoMode(QLineEdit.EchoMode.Normal if self.pass_toggle_btn.isChecked() else QLineEdit.EchoMode.Password))
+        pass_layout.addWidget(self.pass_input)
+        pass_layout.addWidget(self.pass_toggle_btn)
         
         self.key_input = QLineEdit()
         self.key_input.setPlaceholderText("Private Key (Optional)")
@@ -459,12 +483,19 @@ class SidebarWidget(QWidget):
         btn_layout.addWidget(self.del_btn)
 
         form_layout.addRow(self.name_input)
-        form_layout.addRow(self.host_input)
+        form_layout.addRow(host_layout)
         form_layout.addRow(self.user_input)
-        form_layout.addRow(self.pass_input)
+        form_layout.addRow(pass_layout)
         form_layout.addRow(key_layout)
         form_layout.addRow(btn_layout)
-        layout.addWidget(form_widget)
+        
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setWidget(form_widget)
+        scroll_area.setMinimumHeight(200)
+        
+        layout.addWidget(scroll_area)
 
     def load_data(self):
         if not os.path.exists(self.config_dir): os.makedirs(self.config_dir)
@@ -480,6 +511,7 @@ class SidebarWidget(QWidget):
         self.site_list.clearSelection()
         self.name_input.clear()
         self.host_input.clear()
+        self.port_input.setText("22")
         self.user_input.clear()
         self.pass_input.clear()
         self.key_input.clear()
@@ -491,6 +523,7 @@ class SidebarWidget(QWidget):
             data = self.sites[site_name]
             self.name_input.setText(site_name)
             self.host_input.setText(data.get('host', ''))
+            self.port_input.setText(str(data.get('port', 22)))
             self.user_input.setText(data.get('user', ''))
             self.key_input.setText(data.get('key_path', ''))
             saved_pass = keyring.get_password("nova_sftp", site_name)
@@ -506,9 +539,12 @@ class SidebarWidget(QWidget):
     def save_site(self):
         name = self.name_input.text().strip()
         if not name: return
+        port_val = self.port_input.text().strip()
+        port = int(port_val) if port_val.isdigit() else 22
+        
         self.sites[name] = { 
             'host': self.host_input.text(), 
-            'port': 22, 
+            'port': port, 
             'user': self.user_input.text(), 
             'key_path': self.key_input.text() 
         }
@@ -535,7 +571,6 @@ class SidebarWidget(QWidget):
         self.populate_fields(site_name)
         self.main_app.open_session_tab(label=site_name)
 
-
 class RemoteTreeView(QTreeView):
     files_dropped = pyqtSignal(list)
     quick_look_requested = pyqtSignal(str)
@@ -555,7 +590,7 @@ class RemoteTreeView(QTreeView):
         event.acceptProposedAction()
         
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Space:
+        if event.key() in (Qt.Key.Key_Space.value, 32):
             idx = self.currentIndex()
             if idx.isValid():
                 item = self.model().sourceModel().item(self.model().mapToSource(idx).row(), 0)
@@ -1351,18 +1386,66 @@ class SessionTab(QWidget):
                 if os.path.isdir(local_path):
                     await sftp.put(local_path, remote_path, recurse=True, progress_handler=progress_cb)
                 else:
-                    await sftp.put(local_path, remote_path, progress_handler=progress_cb)
+                    local_size = os.path.getsize(local_path)
+                    remote_size = 0
+                    try:
+                        st = await sftp.stat(remote_path)
+                        remote_size = st.size
+                    except: pass
+                    
+                    if 0 < remote_size < local_size:
+                        self.sync_log_view.appendPlainText(f"[Resume] Resuming upload: {os.path.basename(local_path)} (starting at {format_size(remote_size)})")
+                        status_item = self.queue_model.item(row_index, 2)
+                        status_item.setText("Resuming...")
+                        
+                        async with sftp.open(remote_path, 'a') as rf:
+                            with open(local_path, 'rb') as lf:
+                                lf.seek(remote_size)
+                                chunk_size = 1024 * 1024
+                                transferred = remote_size
+                                while True:
+                                    task = self.transfer_tasks.get(row_index)
+                                    if task and task.cancelled(): raise asyncio.CancelledError()
+                                    chunk = lf.read(chunk_size)
+                                    if not chunk: break
+                                    await rf.write(chunk)
+                                    transferred += len(chunk)
+                                    progress_cb(local_path, remote_path, transferred, local_size)
+                    else:
+                        await sftp.put(local_path, remote_path, progress_handler=progress_cb)
             else:
                 is_r_dir = False
+                remote_size = 0
                 try: 
                     st = await sftp.stat(remote_path)
                     is_r_dir = stat.S_ISDIR(st.permissions)
+                    remote_size = st.size
                 except: pass
                 
                 if is_r_dir:
                     await sftp.get(remote_path, local_path, recurse=True, progress_handler=progress_cb)
                 else:
-                    await sftp.get(remote_path, local_path, progress_handler=progress_cb)
+                    local_size = os.path.getsize(local_path) if os.path.exists(local_path) else 0
+                    if 0 < local_size < remote_size:
+                        self.sync_log_view.appendPlainText(f"[Resume] Resuming download: {os.path.basename(remote_path)} (starting at {format_size(local_size)})")
+                        status_item = self.queue_model.item(row_index, 2)
+                        status_item.setText("Resuming...")
+                        
+                        async with sftp.open(remote_path, 'rb') as rf:
+                            await rf.seek(local_size)
+                            with open(local_path, 'ab') as lf:
+                                chunk_size = 1024 * 1024
+                                transferred = local_size
+                                while True:
+                                    task = self.transfer_tasks.get(row_index)
+                                    if task and task.cancelled(): raise asyncio.CancelledError()
+                                    chunk = await rf.read(chunk_size)
+                                    if not chunk: break
+                                    lf.write(chunk)
+                                    transferred += len(chunk)
+                                    progress_cb(remote_path, local_path, transferred, remote_size)
+                    else:
+                        await sftp.get(remote_path, local_path, progress_handler=progress_cb)
             
             self.transfer_complete(row_index, direction)
         except asyncio.CancelledError:
@@ -1532,7 +1615,7 @@ class SessionTab(QWidget):
         self.sync_log_view.appendPlainText(f"[Auto-Sync] Pushing changed file: {filename}")
         self.start_transfer(local_filepath, remote_filepath, "upload")
 
-    @asyncSlot()
+    @asyncSlot(str)
     async def trigger_quick_look(self, filename):
         remote_path = f"{self.current_remote_path.rstrip('/')}/{filename}"
         self.status_changed.emit(f"Fetching preview for {filename}...")
@@ -1711,7 +1794,6 @@ class SessionTab(QWidget):
         self.update_queue_badge()
 
     def set_local_path(self, target_path, record_history=True):
-        # Allow empty string "" on Windows to view all mounted Drives ("My Computer")
         if target_path == "":
             curr = self.local_path_input.text()
             if record_history and curr != "":
@@ -1744,7 +1826,6 @@ class SessionTab(QWidget):
         if qdir.cdUp():
             self.set_local_path(os.path.normpath(qdir.absolutePath()))
         elif sys.platform == "win32":
-            # Step out of C:\ to the Windows drive selection view
             self.set_local_path("")
 
     def go_local_home(self): self.set_local_path(self.main_app.local_home_path)
@@ -1946,7 +2027,7 @@ class SessionTab(QWidget):
             cmd = f"cd \"{self.current_remote_path}\" && unzip -o \"{item.text()}\""
             asyncio.create_task(self.run_remote_command_async('exec', '', cmd))
 
-    def closeEvent(self, event):
+    def close_tab_resources(self):
         if getattr(self, 'live_sync_observer', None):
             self.live_sync_observer.stop()
             self.live_sync_observer.join()
@@ -1959,8 +2040,6 @@ class SessionTab(QWidget):
         
         if getattr(self, 'sftp_client', None): self.sftp_client.exit()
         if getattr(self, 'ssh_conn', None): self.ssh_conn.close()
-        
-        event.accept()
 
 # ==========================================
 # MAIN WINDOW & TABBED SESSION CONTROLLER
@@ -1970,7 +2049,7 @@ class NovaSFTP(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Nova SFTP")
-        self.resize(1380, 940)
+        self.resize(1150, 720)
 
         icon_paths = [
             resource_path("nova-sftp.ico"),
@@ -1993,8 +2072,10 @@ class NovaSFTP(QMainWindow):
             self.local_home_path = os.path.normpath(QDir.homePath())
 
         self.saved_sidebar_width = 250
+        self.is_quitting = False
         
         self.init_ui()
+        self.setup_tray_icon()
         self.apply_theme()
 
     def load_settings(self):
@@ -2068,9 +2149,16 @@ class NovaSFTP(QMainWindow):
         self.port_input.setFixedWidth(60)
         self.user_input = QLineEdit()
         self.user_input.setPlaceholderText("Username")
+        
         self.pass_input = QLineEdit()
         self.pass_input.setPlaceholderText("Password")
         self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+        
+        self.pass_toggle_btn = QToolButton()
+        self.pass_toggle_btn.setText("👁")
+        self.pass_toggle_btn.setCheckable(True)
+        self.pass_toggle_btn.setToolTip("Toggle Password Visibility")
+        self.pass_toggle_btn.clicked.connect(lambda: self.pass_input.setEchoMode(QLineEdit.EchoMode.Normal if self.pass_toggle_btn.isChecked() else QLineEdit.EchoMode.Password))
 
         self.key_btn = QToolButton()
         self.key_btn.setIcon(QIcon.fromTheme("dialog-password", self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon)))
@@ -2082,7 +2170,7 @@ class NovaSFTP(QMainWindow):
         self.connect_btn = QPushButton("Connect")
         self.connect_btn.clicked.connect(self.open_session_tab)
 
-        for w in (self.sidebar_toggle_btn, self.host_input, self.port_input, self.user_input, self.key_btn, self.pass_input, self.connect_btn):
+        for w in (self.sidebar_toggle_btn, self.host_input, self.port_input, self.user_input, self.key_btn, self.pass_input, self.pass_toggle_btn, self.connect_btn):
             top_layout.addWidget(w)
         
         workspace_layout.addWidget(top_bar)
@@ -2110,6 +2198,25 @@ class NovaSFTP(QMainWindow):
 
         self.statusBar().showMessage("Ready - Press Spacebar on remote files for Quick Look preview.")
 
+    def setup_tray_icon(self):
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(self.windowIcon())
+        
+        tray_menu = QMenu()
+        show_action = tray_menu.addAction("Show Dashboard")
+        show_action.triggered.connect(self.showNormal)
+        quit_action = tray_menu.addAction("Quit Nova SFTP")
+        quit_action.triggered.connect(self.quit_app)
+        
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self.tray_icon_activated)
+        self.tray_icon.show()
+
+    def tray_icon_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
+            self.showNormal()
+            self.activateWindow()
+
     def toggle_sidebar(self):
         sizes = self.global_splitter.sizes()
         if sizes[0] > 0:
@@ -2122,12 +2229,10 @@ class NovaSFTP(QMainWindow):
 
     def show_command_palette(self):
         palette = CommandPalette(self, self)
-        
         geo = self.geometry()
         x = geo.x() + (geo.width() - palette.width()) // 2
         y = geo.y() + (geo.height() - palette.height()) // 2
         palette.move(x, y)
-        
         palette.exec()
 
     def browse_key(self):
@@ -2156,23 +2261,26 @@ class NovaSFTP(QMainWindow):
     def close_tab(self, index):
         widget = self.session_tabs.widget(index)
         if widget:
-            if getattr(widget, 'live_sync_observer', None):
-                widget.live_sync_observer.stop()
-                widget.live_sync_observer.join()
-            widget.log_running = False
-            if getattr(widget, 'log_process', None): widget.log_process.terminate()
-            if getattr(widget, 'term_process', None): widget.term_process.terminate()
-            
-            widget.cancel_all_transfers()
-            widget.abort_sync()
-            
-            if getattr(widget, 'sftp_client', None): widget.sftp_client.exit()
-            if getattr(widget, 'ssh_conn', None): widget.ssh_conn.close()
-            
+            widget.close_tab_resources()
             widget.deleteLater()
         self.session_tabs.removeTab(index)
 
+    def quit_app(self):
+        self.is_quitting = True
+        self.close()
+
     def closeEvent(self, event):
+        if not self.is_quitting and QSystemTrayIcon.isSystemTrayAvailable():
+            event.ignore()
+            self.hide()
+            self.tray_icon.showMessage(
+                "Nova SFTP",
+                "Minimized to tray. Live Sync and SSH tunnels remain active.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000
+            )
+            return
+
         self.app_settings['window_geometry'] = self.saveGeometry().toHex().data().decode('utf-8')
         self.app_settings['window_state'] = self.saveState().toHex().data().decode('utf-8')
         self.app_settings['global_splitter'] = self.global_splitter.saveState().toHex().data().decode('utf-8')
@@ -2188,23 +2296,11 @@ class NovaSFTP(QMainWindow):
         
         for i in range(self.session_tabs.count()):
             widget = self.session_tabs.widget(i)
-            if getattr(widget, 'live_sync_observer', None):
-                widget.live_sync_observer.stop()
-                widget.live_sync_observer.join()
-            widget.log_running = False
-            if getattr(widget, 'log_process', None): widget.log_process.terminate()
-            if getattr(widget, 'term_process', None): widget.term_process.terminate()
-            
-            widget.cancel_all_transfers()
-            widget.abort_sync()
-            
-            if getattr(widget, 'sftp_client', None): widget.sftp_client.exit()
-            if getattr(widget, 'ssh_conn', None): widget.ssh_conn.close()
+            if widget: widget.close_tab_resources()
             
         event.accept()
 
 if __name__ == "__main__":
-    # Ensure Windows taskbar groups the icon properly instead of showing Python's icon
     if sys.platform == "win32":
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("litenova.novasftp.client.1.4")
@@ -2212,8 +2308,8 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("Nova SFTP")
     app.setDesktopFileName("nova-sftp")
+    app.setQuitOnLastWindowClosed(False)
     
-    # Initialize the pure Async loop safely
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
     
