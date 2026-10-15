@@ -1,3 +1,14 @@
+nova-sftp (1.5.0-1) noble; urgency=medium
+
+  * Major UI overhaul: Introduced standalone Cura-style Command Center.
+  * Added Live Line Graphs for CPU, RAM, Swap, and Load Average telemetry.
+  * Added dynamic Process, Docker, and Systemd Service management cards.
+  * Introduced SFTP Bridge functionality for remote-to-remote file transfers.
+  * Added Native rsync injection support for direct datacenter transfers.
+  * Refactored main panel to support Dual-Remote browser views.
+
+ -- Nicky <Streamit.litenova.me@gmail.com>  Thu, 15 Oct 2026 06:45:00 +0100
+
 nova-sftp (1.4.0-3) jammy; urgency=medium
 
   * Fixed PyQt6 integer casting bug preventing spacebar Quick Look execution.
