@@ -11,7 +11,6 @@ import importlib.util
 import asyncio
 
 def ensure_dependencies():
-    """Installs required packages on first run if missing (skipped in compiled binaries)."""
     if getattr(sys, 'frozen', False):
         return
     dependencies = ['PyQt6', 'asyncssh', 'keyring', 'watchdog', 'qasync']
@@ -22,7 +21,6 @@ def ensure_dependencies():
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', *missing])
             os.execv(sys.executable, [sys.executable] + sys.argv)
         except subprocess.CalledProcessError:
-            print(f"Error. Manually run: pip install {' '.join(missing)}")
             sys.exit(1)
 
 ensure_dependencies()
@@ -44,20 +42,20 @@ from PyQt6.QtWidgets import (
     QMessageBox, QMenu, QProgressBar, QHeaderView, QDialog, QListWidget,
     QFormLayout, QInputDialog, QTextEdit, QStyle, QFileDialog, QToolButton,
     QTabWidget, QCheckBox, QPlainTextEdit, QComboBox, QFrame, QSystemTrayIcon,
-    QScrollArea
+    QScrollArea, QGridLayout, QTableWidget, QTableWidgetItem, QAbstractItemView,
+    QStackedWidget, QSizePolicy
 )
 from PyQt6.QtGui import (
     QFileSystemModel, QStandardItemModel, QStandardItem, QIntValidator, QIcon,
     QPainter, QColor, QTextFormat, QFont, QTextCursor, QSyntaxHighlighter, 
-    QTextCharFormat, QPixmap, QKeySequence, QAction
+    QTextCharFormat, QPixmap, QKeySequence, QAction, QPen, QPainterPath, QLinearGradient
 )
 from PyQt6.QtCore import (
-    QDir, Qt, pyqtSignal, QSortFilterProxyModel, QRect, QSize, 
-    QRegularExpression, QByteArray
+    QDir, Qt, pyqtSignal, QSortFilterProxyModel, QRect, QRectF, QSize, 
+    QRegularExpression, QByteArray, pyqtSlot
 )
 
 def resource_path(relative_path):
-    """Get absolute path to resource, works for dev and for PyInstaller."""
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
@@ -68,10 +66,10 @@ def resource_path(relative_path):
 
 PREMIUM_DARK_THEME = """
 QWidget { background-color: #18181b; color: #e4e4e7; font-family: "Segoe UI", "Ubuntu", sans-serif; font-size: 13px; }
-QTreeView, QTableView, QListWidget, QPlainTextEdit { background-color: #09090b; border: 1px solid #27272a; border-radius: 6px; alternate-background-color: #18181b; }
+QTreeView, QTableView, QTableWidget, QListWidget, QPlainTextEdit { background-color: #09090b; border: 1px solid #27272a; border-radius: 6px; alternate-background-color: #18181b; }
 QHeaderView::section { background-color: #18181b; color: #a1a1aa; padding: 8px; border: none; border-right: 1px solid #27272a; border-bottom: 1px solid #27272a; font-weight: 600; }
-QTreeView::item:selected, QTableView::item:selected, QListWidget::item:selected { background-color: #4f46e5; color: white; }
-QTreeView::item { padding: 4px; }
+QTreeView::item:selected, QTableView::item:selected, QTableWidget::item:selected, QListWidget::item:selected { background-color: #4f46e5; color: white; }
+QTreeView::item, QTableWidget::item { padding: 4px; }
 QLineEdit, QTextEdit, QComboBox { background-color: #09090b; border: 1px solid #3f3f46; padding: 6px 10px; border-radius: 6px; color: #f4f4f5; }
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border: 1px solid #6366f1; }
 QComboBox QAbstractItemView { background-color: #09090b; color: #e4e4e7; selection-background-color: #4f46e5; border: 1px solid #3f3f46; border-radius: 6px; }
@@ -100,10 +98,10 @@ QSplitter::handle { background-color: transparent; }
 
 CLEAN_LIGHT_THEME = """
 QWidget { background-color: #f8fafc; color: #0f172a; font-family: "Segoe UI", "Ubuntu", sans-serif; font-size: 13px; }
-QTreeView, QTableView, QListWidget, QPlainTextEdit { background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; alternate-background-color: #f1f5f9; }
+QTreeView, QTableView, QTableWidget, QListWidget, QPlainTextEdit { background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; alternate-background-color: #f1f5f9; }
 QHeaderView::section { background-color: #f8fafc; color: #475569; padding: 8px; border: none; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; font-weight: 600; }
-QTreeView::item:selected, QTableView::item:selected, QListWidget::item:selected { background-color: #3b82f6; color: white; }
-QTreeView::item { padding: 4px; }
+QTreeView::item:selected, QTableView::item:selected, QTableWidget::item:selected, QListWidget::item:selected { background-color: #3b82f6; color: white; }
+QTreeView::item, QTableWidget::item { padding: 4px; }
 QLineEdit, QTextEdit, QComboBox { background-color: #ffffff; border: 1px solid #94a3b8; padding: 6px 10px; border-radius: 6px; color: #0f172a; }
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border: 1px solid #3b82f6; }
 QComboBox QAbstractItemView { background-color: #ffffff; color: #0f172a; selection-background-color: #3b82f6; border: 1px solid #cbd5e1; border-radius: 6px; }
@@ -132,10 +130,10 @@ QSplitter::handle { background-color: transparent; }
 
 DRACULA_THEME = """
 QWidget { background-color: #282a36; color: #f8f8f2; font-family: "Segoe UI", "Ubuntu", sans-serif; font-size: 13px; }
-QTreeView, QTableView, QListWidget, QPlainTextEdit { background-color: #1e1f29; border: 1px solid #44475a; border-radius: 6px; alternate-background-color: #282a36; }
+QTreeView, QTableView, QTableWidget, QListWidget, QPlainTextEdit { background-color: #1e1f29; border: 1px solid #44475a; border-radius: 6px; alternate-background-color: #282a36; }
 QHeaderView::section { background-color: #282a36; color: #6272a4; padding: 8px; border: none; border-right: 1px solid #44475a; border-bottom: 1px solid #44475a; font-weight: 600; }
-QTreeView::item:selected, QTableView::item:selected, QListWidget::item:selected { background-color: #bd93f9; color: #282a36; }
-QTreeView::item { padding: 4px; }
+QTreeView::item:selected, QTableView::item:selected, QTableWidget::item:selected, QListWidget::item:selected { background-color: #bd93f9; color: #282a36; }
+QTreeView::item, QTableWidget::item { padding: 4px; }
 QLineEdit, QTextEdit, QComboBox { background-color: #1e1f29; border: 1px solid #44475a; padding: 6px 10px; border-radius: 6px; color: #f8f8f2; }
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border: 1px solid #ff79c6; }
 QComboBox QAbstractItemView { background-color: #1e1f29; color: #f8f8f2; selection-background-color: #bd93f9; border: 1px solid #44475a; border-radius: 6px; }
@@ -164,10 +162,10 @@ QSplitter::handle { background-color: transparent; }
 
 MONOKAI_THEME = """
 QWidget { background-color: #272822; color: #f8f8f2; font-family: "Segoe UI", "Ubuntu", sans-serif; font-size: 13px; }
-QTreeView, QTableView, QListWidget, QPlainTextEdit { background-color: #1e1f1c; border: 1px solid #3e3d32; border-radius: 6px; alternate-background-color: #272822; }
+QTreeView, QTableView, QTableWidget, QListWidget, QPlainTextEdit { background-color: #1e1f1c; border: 1px solid #3e3d32; border-radius: 6px; alternate-background-color: #272822; }
 QHeaderView::section { background-color: #272822; color: #75715e; padding: 8px; border: none; border-right: 1px solid #3e3d32; border-bottom: 1px solid #3e3d32; font-weight: 600; }
-QTreeView::item:selected, QTableView::item:selected, QListWidget::item:selected { background-color: #f92672; color: #f8f8f2; }
-QTreeView::item { padding: 4px; }
+QTreeView::item:selected, QTableView::item:selected, QTableWidget::item:selected, QListWidget::item:selected { background-color: #f92672; color: #f8f8f2; }
+QTreeView::item, QTableWidget::item { padding: 4px; }
 QLineEdit, QTextEdit, QComboBox { background-color: #1e1f1c; border: 1px solid #3e3d32; padding: 6px 10px; border-radius: 6px; color: #f8f8f2; }
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus { border: 1px solid #66d9ef; }
 QComboBox QAbstractItemView { background-color: #1e1f1c; color: #f8f8f2; selection-background-color: #f92672; border: 1px solid #3e3d32; border-radius: 6px; }
@@ -193,6 +191,14 @@ QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #75715e; bor
 QCheckBox::indicator:checked { background: #f92672; border-color: #f92672; }
 QSplitter::handle { background-color: transparent; }
 """
+
+CURA_MONITOR_BG = "#0f0f13"
+CURA_CARD_BG = "#1c1c22"
+CURA_ACCENT_BLUE = "#3b82f6"
+CURA_ACCENT_PURPLE = "#a855f7"
+CURA_ACCENT_RED = "#ef4444"
+CURA_ACCENT_GREEN = "#10b981"
+CURA_TEXT_MUTED = "#a1a1aa"
 
 # ==========================================
 # FORMATTING & ICON HELPERS
@@ -224,16 +230,11 @@ def get_colored_icon(style, filename, is_dir):
     base_pixmap = style.standardIcon(QStyle.StandardPixmap.SP_FileIcon).pixmap(16, 16)
     
     color = None
-    if ext in ['.py', '.js', '.html', '.css', '.php', '.sh', '.json', '.xml', '.vue']: 
-        color = QColor("#0ea5e9") 
-    elif ext in ['.zip', '.tar', '.gz', '.rar', '.7z']: 
-        color = QColor("#ef4444") 
-    elif ext in ['.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp']: 
-        color = QColor("#10b981") 
-    elif ext in ['.mp3', '.wav', '.flac', '.mp4', '.mkv', '.avi']: 
-        color = QColor("#a855f7") 
-    elif ext in ['.txt', '.md', '.log', '.csv']: 
-        color = QColor("#a1a1aa") 
+    if ext in ['.py', '.js', '.html', '.css', '.php', '.sh', '.json', '.xml', '.vue']: color = QColor("#0ea5e9") 
+    elif ext in ['.zip', '.tar', '.gz', '.rar', '.7z']: color = QColor("#ef4444") 
+    elif ext in ['.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp']: color = QColor("#10b981") 
+    elif ext in ['.mp3', '.wav', '.flac', '.mp4', '.mkv', '.avi']: color = QColor("#a855f7") 
+    elif ext in ['.txt', '.md', '.log', '.csv']: color = QColor("#a1a1aa") 
     
     if color:
         painter = QPainter(base_pixmap)
@@ -241,12 +242,7 @@ def get_colored_icon(style, filename, is_dir):
         painter.fillRect(base_pixmap.rect(), color)
         painter.end()
         return QIcon(base_pixmap)
-        
     return QIcon(base_pixmap)
-
-# ==========================================
-# ASYNC WATCHDOG HANDLER
-# ==========================================
 
 class LocalChangeHandler(FileSystemEventHandler):
     def __init__(self, loop, callback):
@@ -257,15 +253,621 @@ class LocalChangeHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         if not event.is_directory: self._handle_event(event.src_path)
-            
     def on_created(self, event):
         if not event.is_directory: self._handle_event(event.src_path)
-
     def _handle_event(self, path):
         current_time = time.time()
         if current_time - self.last_triggered.get(path, 0) > 1.5:
             self.last_triggered[path] = current_time
             self.loop.call_soon_threadsafe(lambda: asyncio.create_task(self.callback(path)))
+
+# ==========================================
+# CUSTOM WIDGETS FOR SERVER MONITOR (CURA STYLE)
+# ==========================================
+
+class LiveLineGraph(QWidget):
+    def __init__(self, title, color_hex, max_val=100.0, is_percent=True):
+        super().__init__()
+        self.title = title
+        self.color = QColor(color_hex)
+        self.data = [0] * 60
+        self.current_val = 0
+        self.max_val = max_val
+        self.is_percent = is_percent
+        self.setMinimumHeight(120)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def update_data(self, val):
+        self.current_val = val
+        self.data.append(val)
+        if len(self.data) > 60:
+            self.data.pop(0)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect()
+
+        bg_rect = QRectF(rect)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(CURA_CARD_BG))
+        painter.drawRoundedRect(bg_rect, 8, 8)
+
+        painter.setPen(QColor(CURA_TEXT_MUTED))
+        font = painter.font()
+        font.setPointSize(11)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(15, 25, self.title)
+        
+        font.setPointSize(14)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(self.color)
+        val_str = f"{self.current_val}%" if self.is_percent else f"{self.current_val}"
+        painter.drawText(rect.adjusted(0, 5, -15, 0), Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight, val_str)
+
+        path = QPainterPath()
+        h = rect.height() - 40
+        w = rect.width()
+        dx = w / 59.0
+
+        for i, val in enumerate(self.data):
+            x = i * dx
+            scaled_val = min(val, self.max_val)
+            y = rect.height() - ((scaled_val / self.max_val) * h)
+            if i == 0: path.moveTo(x, y)
+            else: path.lineTo(x, y)
+
+        fill_path = QPainterPath(path)
+        fill_path.lineTo(w, rect.height())
+        fill_path.lineTo(0, rect.height())
+        fill_path.closeSubpath()
+
+        grad = QLinearGradient(0, 40, 0, rect.height())
+        grad.setColorAt(0, QColor(self.color.red(), self.color.green(), self.color.blue(), 100))
+        grad.setColorAt(1, QColor(self.color.red(), self.color.green(), self.color.blue(), 0))
+        painter.fillPath(fill_path, grad)
+
+        pen = QPen(self.color, 1.5)
+        painter.setPen(pen)
+        painter.drawPath(path)
+
+class ProcessCard(QFrame):
+    manage_requested = pyqtSignal(str, str, str) # action, pid, name
+
+    def __init__(self, pid, user, cpu, mem, cmd):
+        super().__init__()
+        self.pid = pid
+        self.cmd = cmd
+        self.setStyleSheet(f"""
+            QFrame {{ background-color: {CURA_CARD_BG}; border-radius: 10px; border: 1px solid #27272a; }}
+            QLabel {{ border: none; background: transparent; }}
+        """)
+        self.setFixedHeight(75)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 10, 15, 10)
+        
+        top_row = QHBoxLayout()
+        self.lbl_cmd = QLabel(cmd[:60] + "..." if len(cmd) > 60 else cmd)
+        self.lbl_cmd.setStyleSheet("color: #f4f4f5; font-size: 13px; font-weight: bold;")
+        
+        self.btn_manage = QToolButton()
+        self.btn_manage.setText("⋮")
+        self.btn_manage.setStyleSheet(f"color: {CURA_TEXT_MUTED}; font-weight: bold; background: transparent; border: none; font-size: 20px;")
+        self.btn_manage.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_manage.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        
+        menu = QMenu()
+        menu.setStyleSheet(f"QMenu {{ background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; }} QMenu::item {{ padding: 6px 24px; color: #f4f4f5; }} QMenu::item:selected {{ background-color: {CURA_ACCENT_BLUE}; }}")
+        
+        for act_text, act_cmd in [("Kill Process (SIGTERM)", "kill"), ("Force Kill (SIGKILL)", "force_kill")]:
+            action = menu.addAction(act_text)
+            action.triggered.connect(lambda checked, a=act_cmd, p=self.pid, n=self.cmd: self.manage_requested.emit(a, p, n))
+            
+        self.btn_manage.setMenu(menu)
+        
+        top_row.addWidget(self.lbl_cmd)
+        top_row.addStretch()
+        top_row.addWidget(self.btn_manage)
+        
+        bot_row = QHBoxLayout()
+        lbl_meta = QLabel(f"PID {pid}   {user}")
+        lbl_meta.setStyleSheet(f"color: {CURA_TEXT_MUTED}; font-size: 12px;")
+        
+        self.lbl_cpu = QLabel(f"CPU {cpu}%")
+        self.lbl_cpu.setStyleSheet(f"color: {CURA_ACCENT_BLUE}; font-size: 12px; font-weight: bold;")
+        
+        self.lbl_mem = QLabel(f"MEM {mem}%")
+        self.lbl_mem.setStyleSheet(f"color: {CURA_ACCENT_PURPLE}; font-size: 12px; font-weight: bold;")
+        
+        bot_row.addWidget(lbl_meta)
+        bot_row.addSpacing(15)
+        bot_row.addWidget(self.lbl_cpu)
+        bot_row.addSpacing(10)
+        bot_row.addWidget(self.lbl_mem)
+        bot_row.addStretch()
+        
+        layout.addLayout(top_row)
+        layout.addLayout(bot_row)
+
+    def update_data(self, cpu, mem):
+        self.lbl_cpu.setText(f"CPU {cpu}%")
+        self.lbl_mem.setText(f"MEM {mem}%")
+
+class ServiceCard(QFrame):
+    manage_requested = pyqtSignal(str, str) # action, name
+
+    def __init__(self, name, status, desc):
+        super().__init__()
+        self.s_name = name
+        self.setStyleSheet(f"""
+            QFrame {{ background-color: {CURA_CARD_BG}; border-radius: 10px; border: 1px solid #27272a; }}
+            QLabel {{ border: none; background: transparent; }}
+        """)
+        self.setFixedHeight(75)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 10, 15, 10)
+        
+        is_running = "running" in status.lower()
+        is_failed = "failed" in status.lower()
+        
+        color = CURA_ACCENT_GREEN if is_running else (CURA_ACCENT_RED if is_failed else CURA_TEXT_MUTED)
+        badge_text = status.upper()
+        
+        top_row = QHBoxLayout()
+        dot = QLabel("●")
+        dot.setStyleSheet(f"color: {color}; font-size: 14px;")
+        
+        lbl_name = QLabel(name)
+        lbl_name.setStyleSheet("color: #f4f4f5; font-size: 13px; font-weight: bold;")
+        
+        lbl_badge = QLabel(badge_text)
+        lbl_badge.setStyleSheet(f"color: {color}; font-size: 11px; font-weight: bold; border: 1px solid {color}; border-radius: 4px; padding: 2px 6px;")
+        
+        self.btn_manage = QToolButton()
+        self.btn_manage.setText("⋮")
+        self.btn_manage.setStyleSheet(f"color: {CURA_TEXT_MUTED}; font-weight: bold; background: transparent; border: none; font-size: 20px;")
+        self.btn_manage.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_manage.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        
+        menu = QMenu()
+        menu.setStyleSheet(f"QMenu {{ background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; }} QMenu::item {{ padding: 6px 24px; color: #f4f4f5; }} QMenu::item:selected {{ background-color: {CURA_ACCENT_BLUE}; }}")
+        
+        for act_text, act_cmd in [("Start", "start"), ("Stop", "stop"), ("Restart", "restart"), ("Status Info", "status"), ("View Logs", "logs")]:
+            action = menu.addAction(act_text)
+            action.triggered.connect(lambda checked, a=act_cmd, n=self.s_name: self.manage_requested.emit(a, n))
+            
+        self.btn_manage.setMenu(menu)
+        
+        top_row.addWidget(dot)
+        top_row.addWidget(lbl_name)
+        top_row.addStretch()
+        top_row.addWidget(lbl_badge)
+        top_row.addSpacing(10)
+        top_row.addWidget(self.btn_manage)
+        
+        bot_row = QHBoxLayout()
+        lbl_desc = QLabel(desc[:70] + "..." if len(desc) > 70 else desc)
+        lbl_desc.setStyleSheet(f"color: {CURA_TEXT_MUTED}; font-size: 12px;")
+        bot_row.addWidget(lbl_desc)
+        bot_row.addStretch()
+        
+        layout.addLayout(top_row)
+        layout.addLayout(bot_row)
+
+class DockerCard(QFrame):
+    action_requested = pyqtSignal(str, str) # action, container_name
+
+    def __init__(self, name, status, ports, c_id):
+        super().__init__()
+        self.c_name = name
+        self.setStyleSheet(f"""
+            QFrame {{ background-color: {CURA_CARD_BG}; border-radius: 10px; border: 1px solid #27272a; }}
+            QLabel {{ border: none; background: transparent; }}
+        """)
+        self.setFixedHeight(85)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 10, 15, 10)
+        
+        is_up = "Up" in status
+        color = CURA_ACCENT_GREEN if is_up else CURA_ACCENT_RED
+        badge_text = "UP" if is_up else "EXITED"
+        
+        top_row = QHBoxLayout()
+        lbl_name = QLabel(name)
+        lbl_name.setStyleSheet("color: #f4f4f5; font-size: 14px; font-weight: bold;")
+        
+        lbl_badge = QLabel(badge_text)
+        lbl_badge.setStyleSheet(f"color: {color}; font-size: 11px; font-weight: bold; background-color: rgba({int(color[1:3],16)}, {int(color[3:5],16)}, {int(color[5:7],16)}, 0.15); border-radius: 4px; padding: 3px 8px;")
+        
+        self.btn_manage = QToolButton()
+        self.btn_manage.setText("⋮")
+        self.btn_manage.setStyleSheet(f"color: {CURA_TEXT_MUTED}; font-weight: bold; background: transparent; border: none; font-size: 20px;")
+        self.btn_manage.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_manage.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        
+        menu = QMenu()
+        menu.setStyleSheet(f"QMenu {{ background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; }} QMenu::item {{ padding: 6px 24px; color: #f4f4f5; }} QMenu::item:selected {{ background-color: {CURA_ACCENT_BLUE}; }}")
+        
+        for act_text, act_cmd in [("Start", "start"), ("Stop", "stop"), ("Restart", "restart"), ("View Logs", "logs")]:
+            action = menu.addAction(act_text)
+            action.triggered.connect(lambda checked, a=act_cmd, n=self.c_name: self.action_requested.emit(a, n))
+            
+        self.btn_manage.setMenu(menu)
+
+        top_row.addWidget(lbl_name)
+        top_row.addStretch()
+        top_row.addWidget(lbl_badge)
+        top_row.addSpacing(10)
+        top_row.addWidget(self.btn_manage)
+        
+        bot_row = QHBoxLayout()
+        lbl_desc = QLabel(f"ID: {c_id}  |  {ports}" if ports else f"ID: {c_id}")
+        lbl_desc.setStyleSheet(f"color: {CURA_TEXT_MUTED}; font-size: 12px;")
+        bot_row.addWidget(lbl_desc)
+        bot_row.addStretch()
+        
+        layout.addLayout(top_row)
+        layout.addLayout(bot_row)
+
+class HealthSummaryCard(QFrame):
+    def __init__(self, title, val, is_bad=False):
+        super().__init__()
+        self.setStyleSheet(f"""
+            QFrame {{ background-color: {CURA_CARD_BG}; border-radius: 10px; border: 1px solid #27272a; }}
+            QLabel {{ border: none; background: transparent; }}
+        """)
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        icon_lbl = QLabel("🔴" if is_bad else "✅")
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.val_lbl = QLabel(str(val))
+        color = CURA_ACCENT_RED if is_bad and int(val) > 0 else CURA_ACCENT_GREEN
+        self.val_lbl.setStyleSheet(f"color: {color}; font-size: 24px; font-weight: bold;")
+        self.val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet(f"color: {CURA_TEXT_MUTED}; font-size: 12px;")
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        layout.addWidget(icon_lbl)
+        layout.addWidget(self.val_lbl)
+        layout.addWidget(title_lbl)
+
+    def update_val(self, val):
+        self.val_lbl.setText(str(val))
+        
+class ServerMonitorWindow(QMainWindow):
+    def __init__(self, session_tab):
+        super().__init__(session_tab.main_app)
+        self.session_tab = session_tab
+        self.setWindowTitle(f"Command Center - {self.session_tab.host}")
+        self.resize(500, 800)
+        self.setStyleSheet(f"QMainWindow, QWidget {{ background-color: {CURA_MONITOR_BG}; font-family: 'Segoe UI', sans-serif; }}")
+
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        self.layout = QVBoxLayout(central_widget)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+
+        nav_frame = QFrame()
+        nav_frame.setStyleSheet(f"background-color: {CURA_MONITOR_BG}; border-bottom: 1px solid #27272a;")
+        nav_layout = QHBoxLayout(nav_frame)
+        
+        self.tabs = QStackedWidget()
+        
+        self.btn_live = self.create_nav_btn("Live Monitor", 0, active=True)
+        self.btn_proc = self.create_nav_btn("Processes", 1)
+        self.btn_health = self.create_nav_btn("Health", 2)
+        self.btn_docker = self.create_nav_btn("Docker", 3)
+        
+        nav_layout.addWidget(self.btn_live)
+        nav_layout.addWidget(self.btn_proc)
+        nav_layout.addWidget(self.btn_health)
+        nav_layout.addWidget(self.btn_docker)
+        
+        self.layout.addWidget(nav_frame)
+        self.layout.addWidget(self.tabs)
+
+        # --- TAB 0: LIVE MONITOR ---
+        scroll_live = QScrollArea()
+        scroll_live.setWidgetResizable(True)
+        scroll_live.setFrameShape(QFrame.Shape.NoFrame)
+        w_live = QWidget()
+        l_live = QVBoxLayout(w_live)
+        l_live.setContentsMargins(15, 15, 15, 15)
+        
+        self.cpu_graph = LiveLineGraph("CPU", CURA_ACCENT_BLUE)
+        self.ram_graph = LiveLineGraph("RAM", CURA_ACCENT_PURPLE)
+        self.swap_graph = LiveLineGraph("Swap", CURA_ACCENT_RED)
+        self.load_graph = LiveLineGraph("Load Avg", CURA_ACCENT_GREEN, max_val=4.0, is_percent=False)
+        
+        l_live.addWidget(self.cpu_graph)
+        l_live.addWidget(self.ram_graph)
+        l_live.addWidget(self.swap_graph)
+        l_live.addWidget(self.load_graph)
+        l_live.addStretch()
+        scroll_live.setWidget(w_live)
+        self.tabs.addWidget(scroll_live)
+
+        # --- TAB 1: PROCESSES ---
+        self.scroll_proc = QScrollArea()
+        self.scroll_proc.setWidgetResizable(True)
+        self.scroll_proc.setFrameShape(QFrame.Shape.NoFrame)
+        self.w_proc = QWidget()
+        self.l_proc = QVBoxLayout(self.w_proc)
+        self.l_proc.setContentsMargins(15, 15, 15, 15)
+        self.l_proc.setSpacing(10)
+        self.l_proc.addStretch() 
+        self.scroll_proc.setWidget(self.w_proc)
+        self.tabs.addWidget(self.scroll_proc)
+        self.proc_cards = {} 
+
+        # --- TAB 2: HEALTH (SERVICES & SYSTEM) ---
+        scroll_health = QScrollArea()
+        scroll_health.setWidgetResizable(True)
+        scroll_health.setFrameShape(QFrame.Shape.NoFrame)
+        self.w_health = QWidget()
+        self.l_health = QVBoxLayout(self.w_health)
+        self.l_health.setContentsMargins(15, 15, 15, 15)
+        self.l_health.setSpacing(15)
+        
+        sys_health_frame = QFrame()
+        sys_health_frame.setStyleSheet(f"background-color: {CURA_CARD_BG}; border-radius: 10px;")
+        sys_l = QVBoxLayout(sys_health_frame)
+        lbl_sh = QLabel("System Health")
+        lbl_sh.setStyleSheet("color: white; font-weight: bold; font-size: 15px;")
+        self.lbl_reboot = QLabel("↻ Reboot required: Checking...")
+        self.lbl_updates = QLabel("⬇ Pending updates: Checking...")
+        sys_l.addWidget(lbl_sh)
+        sys_l.addWidget(self.lbl_reboot)
+        sys_l.addWidget(self.lbl_updates)
+        self.l_health.addWidget(sys_health_frame)
+        
+        h_cards = QHBoxLayout()
+        self.card_run = HealthSummaryCard("Running", 0)
+        self.card_fail = HealthSummaryCard("Failed", 0, is_bad=True)
+        self.card_stop = HealthSummaryCard("Stopped", 0)
+        h_cards.addWidget(self.card_run)
+        h_cards.addWidget(self.card_fail)
+        h_cards.addWidget(self.card_stop)
+        self.l_health.addLayout(h_cards)
+        
+        lbl_all = QLabel("All services")
+        lbl_all.setStyleSheet(f"color: {CURA_TEXT_MUTED}; font-weight: bold; margin-top: 10px;")
+        self.l_health.addWidget(lbl_all)
+        
+        self.l_services = QVBoxLayout()
+        self.l_services.setSpacing(10)
+        self.l_health.addLayout(self.l_services)
+        self.l_health.addStretch()
+        scroll_health.setWidget(self.w_health)
+        self.tabs.addWidget(scroll_health)
+
+        # --- TAB 3: DOCKER ---
+        self.scroll_dock = QScrollArea()
+        self.scroll_dock.setWidgetResizable(True)
+        self.scroll_dock.setFrameShape(QFrame.Shape.NoFrame)
+        self.w_dock = QWidget()
+        self.l_dock = QVBoxLayout(self.w_dock)
+        self.l_dock.setContentsMargins(15, 15, 15, 15)
+        self.l_dock.setSpacing(10)
+        self.l_dock.addStretch()
+        self.scroll_dock.setWidget(self.w_dock)
+        self.tabs.addWidget(self.scroll_dock)
+
+        self.is_polling = False
+        self.prev_cpu_idle = 0
+        self.prev_cpu_total = 0
+        asyncio.create_task(self.start_polling())
+
+    def create_nav_btn(self, text, index, active=False):
+        btn = QPushButton(text)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_btn_style(btn, active)
+        btn.clicked.connect(lambda: self.switch_tab(index))
+        return btn
+
+    def update_btn_style(self, btn, active):
+        if active:
+            btn.setStyleSheet(f"background: transparent; color: {CURA_ACCENT_BLUE}; font-weight: bold; font-size: 14px; border: none; border-bottom: 2px solid {CURA_ACCENT_BLUE}; padding-bottom: 8px;")
+        else:
+            btn.setStyleSheet(f"background: transparent; color: {CURA_TEXT_MUTED}; font-weight: bold; font-size: 14px; border: none; padding-bottom: 8px;")
+
+    def switch_tab(self, index):
+        self.tabs.setCurrentIndex(index)
+        for i, btn in enumerate([self.btn_live, self.btn_proc, self.btn_health, self.btn_docker]):
+            self.update_btn_style(btn, i == index)
+
+    def closeEvent(self, event):
+        self.is_polling = False
+        event.accept()
+
+    @pyqtSlot(str, str, str)
+    def handle_process_manage(self, action, pid, name):
+        if action == "kill":
+            asyncio.create_task(self.session_tab.run_remote_command_async('exec', '', f"kill {pid}"))
+        elif action == "force_kill":
+            asyncio.create_task(self.session_tab.run_remote_command_async('exec', '', f"kill -9 {pid}"))
+
+    @pyqtSlot(str, str)
+    def handle_service_manage(self, action, name):
+        if action in ['start', 'stop', 'restart']:
+            asyncio.create_task(self.session_tab.run_remote_command_async('exec', '', f"sudo systemctl {action} {name}"))
+        elif action == 'status':
+            self.session_tab.bottom_tabs.setCurrentIndex(1) 
+            self.session_tab.term_input.setText(f"systemctl status {name}")
+            self.session_tab.send_terminal_cmd()
+            self.session_tab.main_app.activateWindow()
+            self.close()
+        elif action == 'logs':
+            self.session_tab.bottom_tabs.setCurrentIndex(3) 
+            self.session_tab.log_path_input.setCurrentText(f"journalctl -u {name} -n 50 --no-pager -f")
+            self.session_tab.start_log_tail()
+            self.session_tab.main_app.activateWindow()
+            self.close()
+
+    @pyqtSlot(str, str)
+    def handle_docker_manage(self, action, container):
+        if action in ['start', 'stop', 'restart']:
+            asyncio.create_task(self.session_tab.run_remote_command_async('exec', '', f"docker {action} {container}"))
+        elif action == "logs":
+            self.session_tab.bottom_tabs.setCurrentIndex(3) 
+            self.session_tab.log_path_input.setCurrentText(f"docker logs -n 50 -f {container}")
+            self.session_tab.start_log_tail()
+            self.session_tab.main_app.activateWindow()
+            self.close()
+
+    async def start_polling(self):
+        self.is_polling = True
+        conn = self.session_tab.ssh_conn
+        if not conn: return
+            
+        cmd = """
+        echo "===SYS==="
+        cat /proc/stat | grep '^cpu '
+        cat /proc/meminfo | grep -E '^MemTotal|^MemAvailable|^SwapTotal|^SwapFree'
+        cat /proc/loadavg
+        [ -f /var/run/reboot-required ] && echo "Yes" || echo "No"
+        apt-get -s upgrade 2>/dev/null | grep -P '^\d+ upgraded' | awk '{print $1}' || echo "0"
+        echo "===PROC==="
+        ps aux --sort=-%cpu | head -n 30
+        echo "===DOCKER==="
+        if command -v docker >/dev/null 2>&1; then docker ps -a --format '{{.ID}}|{{.Names}}|{{.Status}}|{{.Ports}}'; else echo "NO_DOCKER"; fi
+        echo "===SERVICES==="
+        if command -v systemctl >/dev/null 2>&1; then 
+            systemctl list-units --type=service --all --plain --no-legend --no-pager | awk '{name=$1; load=$2; active=$3; sub_stat=$4; $1=$2=$3=$4=""; sub(/^[ \t]+/, ""); print name"|"active"|"sub_stat"|"$0}'
+        else 
+            echo "NO_SYSTEMD"
+        fi
+        """
+        
+        while self.is_polling:
+            try:
+                res = await conn.run(cmd)
+                if res.exit_status == 0:
+                    self.parse_and_update(res.stdout)
+            except Exception as e:
+                pass
+            await asyncio.sleep(2.5)
+
+    def parse_and_update(self, data):
+        try:
+            parts = data.split("===PROC===")
+            sys_data = parts[0].replace("===SYS===", "").strip()
+            parts2 = parts[1].split("===DOCKER===")
+            proc_data = parts2[0].strip()
+            parts3 = parts2[1].split("===SERVICES===")
+            docker_data = parts3[0].strip()
+            services_data = parts3[1].strip() if len(parts3) > 1 else ""
+            
+            # 1. SYS INFO
+            lines = sys_data.split('\n')
+            cpu_parts = lines[0].split()[1:]
+            idle = float(cpu_parts[3]) + float(cpu_parts[4])
+            total = sum(float(p) for p in cpu_parts)
+            cpu_diff = total - self.prev_cpu_total
+            idle_diff = idle - self.prev_cpu_idle
+            cpu_pct = int(100.0 * (1.0 - idle_diff / cpu_diff)) if cpu_diff > 0 else 0
+            self.prev_cpu_total, self.prev_cpu_idle = total, idle
+            
+            mem_tot = int(lines[1].split()[1]) if len(lines) > 1 else 0
+            mem_avail = int(lines[2].split()[1]) if len(lines) > 2 and "MemAvailable" in lines[2] else mem_tot
+            ram_pct = int(((mem_tot - mem_avail) / mem_tot) * 100) if mem_tot > 0 else 0
+            
+            swap_tot = int(lines[3].split()[1]) if len(lines) > 3 else 0
+            swap_free = int(lines[4].split()[1]) if len(lines) > 4 else 0
+            swap_pct = int(((swap_tot - swap_free) / swap_tot) * 100) if swap_tot > 0 else 0
+            
+            load_val = float(lines[5].split()[0]) if len(lines) > 5 else 0.0
+            reboot_req = lines[6].strip() if len(lines) > 6 else "No"
+            pending_upd = lines[7].strip() if len(lines) > 7 else "0"
+            
+            self.cpu_graph.update_data(cpu_pct)
+            self.ram_graph.update_data(ram_pct)
+            self.swap_graph.update_data(swap_pct)
+            self.load_graph.update_data(load_val)
+            
+            c_reb = CURA_ACCENT_RED if reboot_req == "Yes" else CURA_ACCENT_GREEN
+            self.lbl_reboot.setStyleSheet(f"color: {c_reb};")
+            self.lbl_reboot.setText(f"↻ Reboot required: {reboot_req}")
+            
+            c_upd = CURA_ACCENT_BLUE if pending_upd != "0" else CURA_ACCENT_GREEN
+            self.lbl_updates.setStyleSheet(f"color: {c_upd};")
+            self.lbl_updates.setText(f"⬇ Pending updates: {pending_upd}")
+            
+            # 2. PROCESSES
+            proc_lines = proc_data.split('\n')[1:] 
+            active_pids = set()
+            for line in proc_lines:
+                p = line.split(None, 10)
+                if len(p) >= 11:
+                    user, pid, cpu, mem, cmd = p[0], p[1], p[2], p[3], p[10]
+                    active_pids.add(pid)
+                    if pid in self.proc_cards:
+                        self.proc_cards[pid].update_data(cpu, mem)
+                    else:
+                        card = ProcessCard(pid, user, cpu, mem, cmd)
+                        card.manage_requested.connect(self.handle_process_manage)
+                        self.l_proc.insertWidget(self.l_proc.count() - 1, card)
+                        self.proc_cards[pid] = card
+            
+            for pid in list(self.proc_cards.keys()):
+                if pid not in active_pids:
+                    card = self.proc_cards.pop(pid)
+                    self.l_proc.removeWidget(card)
+                    card.deleteLater()
+
+            # 3. SERVICES (Health)
+            if services_data and "NO_SYSTEMD" not in services_data:
+                svc_lines = [l for l in services_data.split('\n') if l.strip()]
+                for i in reversed(range(self.l_services.count())): 
+                    w = self.l_services.itemAt(i).widget()
+                    if w: w.setParent(None)
+                
+                run_c, fail_c, stop_c = 0, 0, 0
+                for line in svc_lines:
+                    p = line.split('|', 3)
+                    if len(p) >= 4:
+                        name, active, sub_stat, desc = p[0], p[1], p[2], p[3]
+                        if active == 'active' and sub_stat == 'running': run_c += 1
+                        elif active == 'failed': fail_c += 1
+                        elif active == 'inactive': stop_c += 1
+                        
+                        if active == 'failed' or (active == 'active' and sub_stat == 'running' and run_c <= 15):
+                            card = ServiceCard(name, sub_stat, desc)
+                            card.manage_requested.connect(self.handle_service_manage)
+                            self.l_services.addWidget(card)
+
+                self.card_run.update_val(run_c)
+                self.card_fail.update_val(fail_c)
+                self.card_stop.update_val(stop_c)
+
+            # 4. DOCKER
+            if docker_data and "NO_DOCKER" not in docker_data:
+                dock_lines = [l for l in docker_data.split('\n') if l.strip()]
+                for i in reversed(range(self.l_dock.count() - 1)): 
+                    w = self.l_dock.itemAt(i).widget()
+                    if w: w.setParent(None)
+                    
+                for line in dock_lines:
+                    p = line.split('|')
+                    if len(p) >= 4:
+                        c_id, name, status, ports = p[0], p[1], p[2], p[3]
+                        card = DockerCard(name, status, ports, c_id)
+                        card.action_requested.connect(self.handle_docker_manage)
+                        self.l_dock.insertWidget(self.l_dock.count() - 1, card)
+
+        except Exception as e:
+            pass
 
 # ==========================================
 # UI COMPONENTS & SYNTAX HIGHLIGHTER
@@ -357,7 +959,6 @@ class CommandPalette(QDialog):
         self.results_list.addItem("> theme: dracula")
         self.results_list.addItem("> theme: monokai")
         self.results_list.addItem("> ui: close active tab")
-        self.results_list.addItem("> log: open live logs tab")
         
         if self.results_list.count() > 0:
             self.results_list.setCurrentRow(0)
@@ -392,12 +993,6 @@ class CommandPalette(QDialog):
         elif cmd == "> ui: close active tab":
             idx = self.main_app.session_tabs.currentIndex()
             if idx != -1: self.main_app.close_tab(idx)
-        elif cmd == "> log: open live logs tab":
-            idx = self.main_app.session_tabs.currentIndex()
-            if idx != -1:
-                tab = self.main_app.session_tabs.widget(idx)
-                tab.bottom_tabs.setCurrentIndex(3)
-                tab.log_path_input.setFocus()
 
 class SidebarWidget(QWidget):
     def __init__(self, main_app):
@@ -984,10 +1579,6 @@ class TextEditorDialog(QDialog):
     def get_content(self):
         return self.advanced_editor.editor.toPlainText()
 
-# ==========================================
-# ISOLATED SESSION TAB WIDGET
-# ==========================================
-
 class SessionTab(QWidget):
     status_changed = pyqtSignal(str)
 
@@ -995,12 +1586,20 @@ class SessionTab(QWidget):
         super().__init__()
         self.host, self.port, self.user, self.password, self.key_path = host, port, user, password, key_path
         self.main_app = main_app
+        
+        self.left_mode = 'local'
+        self.left_ssh_conn = None
+        self.left_sftp_client = None
+        self.current_left_remote_path = "."
+        self.left_remote_history = []
+        
         self.current_remote_path = "."
         self.local_history, self.remote_history = [], []
         
         self.transfer_tasks = {}
         self.sync_running = False
         self.log_running = False
+        self.monitor_window = None
         
         self.ssh_conn = None
         self.sftp_client = None
@@ -1041,8 +1640,10 @@ class SessionTab(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
 
         sync_bar = QHBoxLayout()
-        sync_lbl = QLabel("Directory Sync Engine:")
-        sync_lbl.setStyleSheet("font-weight: bold; color: #10b981;")
+        
+        self.btn_monitor = QPushButton("📊 Launch Command Center")
+        self.btn_monitor.setStyleSheet("background-color: #4f46e5; color: white;")
+        self.btn_monitor.clicked.connect(self.launch_monitor)
         
         self.btn_live_sync = QPushButton("Live Sync: OFF")
         self.btn_live_sync.setCheckable(True)
@@ -1062,22 +1663,33 @@ class SessionTab(QWidget):
         self.theme_combo.setCurrentIndex(theme_map.get(current_theme, 0))
         self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
         
-        sync_bar.addWidget(sync_lbl)
+        sync_bar.addWidget(self.btn_monitor)
+        sync_bar.addSpacing(15)
+        sync_bar.addWidget(QLabel("Directory Sync:", styleSheet="font-weight: bold; color: #10b981;"))
         sync_bar.addWidget(self.btn_live_sync)
         sync_bar.addWidget(self.sync_btn)
-        sync_bar.addWidget(self.theme_combo)
         sync_bar.addStretch()
+        sync_bar.addWidget(self.theme_combo)
         layout.addLayout(sync_bar)
 
         self.main_splitter = QSplitter(Qt.Orientation.Vertical)
         self.browser_splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Local Pane
         local_widget = QWidget()
         local_layout = QVBoxLayout(local_widget)
         local_layout.setContentsMargins(0, 0, 0, 0)
-        local_nav = QHBoxLayout()
         
+        local_header_layout = QHBoxLayout()
+        self.left_source_combo = QComboBox()
+        self.left_source_combo.setStyleSheet("font-weight: bold; font-size: 13px; padding: 5px;")
+        self.left_source_combo.addItem("💻 Local System (Default)")
+        for site in self.main_app.sidebar.sites.keys():
+            self.left_source_combo.addItem(f"🌐 {site}")
+        self.left_source_combo.currentIndexChanged.connect(self.on_left_source_changed)
+        local_header_layout.addWidget(self.left_source_combo)
+        local_layout.addLayout(local_header_layout)
+
+        local_nav = QHBoxLayout()
         self.local_back_btn = QToolButton(); self.local_back_btn.setProperty("class", "nav-btn")
         self.local_back_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
         self.local_back_btn.setEnabled(False); self.local_back_btn.clicked.connect(self.go_local_back)
@@ -1094,30 +1706,36 @@ class SessionTab(QWidget):
         self.local_path_input.returnPressed.connect(self.on_local_path_entered)
         local_nav.addWidget(self.local_back_btn); local_nav.addWidget(self.local_up_btn)
         local_nav.addWidget(self.local_home_btn); local_nav.addWidget(self.local_path_input)
+        local_layout.addLayout(local_nav)
 
+        self.left_stack = QStackedWidget()
+        
         self.local_view = QTreeView()
         self.local_model = QFileSystemModel()
         self.local_model.setRootPath("")
         self.local_view.setModel(self.local_model)
         self.local_view.setRootIndex(self.local_model.index(self.main_app.local_home_path))
-        
         self.local_view.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.local_view.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.local_view.header().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.local_view.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        
-        loc_hdr = self.main_app.app_settings.get('local_header')
-        if loc_hdr: self.local_view.header().restoreState(QByteArray.fromHex(loc_hdr.encode('utf-8')))
-
         self.local_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.local_view.customContextMenuRequested.connect(self.on_local_context_menu)
         self.local_view.doubleClicked.connect(self.on_local_double_click)
+        self.left_stack.addWidget(self.local_view)
 
-        local_layout.addWidget(QLabel("Local System", styleSheet="font-weight: bold;"))
-        local_layout.addLayout(local_nav)
-        local_layout.addWidget(self.local_view)
+        self.left_remote_view = RemoteTreeView()
+        self.left_remote_model = QStandardItemModel()
+        self.left_remote_model.setHorizontalHeaderLabels(["Name", "Size", "Date Modified", "Permissions"])
+        self.left_proxy_model = QSortFilterProxyModel()
+        self.left_proxy_model.setSourceModel(self.left_remote_model)
+        self.left_proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.left_remote_view.setModel(self.left_proxy_model)
+        self.left_remote_view.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.left_remote_view.doubleClicked.connect(self.on_left_remote_double_click)
+        self.left_remote_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.left_remote_view.customContextMenuRequested.connect(self.on_left_remote_context_menu)
+        self.left_stack.addWidget(self.left_remote_view)
 
-        # Remote Pane
+        local_layout.addWidget(self.left_stack)
+
         remote_widget = QWidget()
         remote_layout = QVBoxLayout(remote_widget)
         remote_layout.setContentsMargins(0, 0, 0, 0)
@@ -1170,18 +1788,11 @@ class SessionTab(QWidget):
 
         self.browser_splitter.addWidget(local_widget)
         self.browser_splitter.addWidget(remote_widget)
-        self.main_splitter.addWidget(self.browser_splitter)
-
-        main_spl_state = self.main_app.app_settings.get('main_splitter')
-        if main_spl_state: self.main_splitter.restoreState(QByteArray.fromHex(main_spl_state.encode('utf-8')))
-        browser_spl_state = self.main_app.app_settings.get('browser_splitter')
-        if browser_spl_state: self.browser_splitter.restoreState(QByteArray.fromHex(browser_spl_state.encode('utf-8')))
-
-        # Bottom Pane
+        
         self.bottom_tabs = QTabWidget()
-        self.bottom_tabs.setFixedHeight(260)
+        self.bottom_tabs.setMinimumHeight(200)
 
-        # Transfer Queue
+        # 0. Transfer Queue
         queue_widget = QWidget()
         queue_layout = QVBoxLayout(queue_widget); queue_layout.setContentsMargins(0, 0, 0, 0)
         self.queue_table = QTableView()
@@ -1202,10 +1813,9 @@ class SessionTab(QWidget):
         cancel_all_btn.setStyleSheet("background-color: #ef4444; border-radius: 0px; color: white;")
         cancel_all_btn.clicked.connect(self.cancel_all_transfers)
         queue_layout.addWidget(cancel_all_btn)
-        
         self.bottom_tabs.addTab(queue_widget, "Transfer Queue")
 
-        # Terminal (Explicitly styled to remain dark)
+        # 1. Interactive Terminal
         term_widget = QWidget()
         term_layout = QVBoxLayout(term_widget); term_layout.setContentsMargins(5, 5, 5, 5)
         self.term_display = QPlainTextEdit()
@@ -1232,7 +1842,7 @@ class SessionTab(QWidget):
         term_layout.addLayout(term_input_layout)
         self.bottom_tabs.addTab(term_widget, "Interactive Terminal")
 
-        # Sync Log (Explicitly styled to remain dark)
+        # 2. Sync Engine Log
         sync_log_widget = QWidget()
         sync_log_layout = QVBoxLayout(sync_log_widget)
         sync_log_layout.setContentsMargins(0, 0, 0, 0)
@@ -1249,7 +1859,7 @@ class SessionTab(QWidget):
         sync_log_layout.addWidget(self.cancel_sync_btn)
         self.bottom_tabs.addTab(sync_log_widget, "Sync Engine Log")
 
-        # Live Logs Tab (Explicitly styled to remain dark)
+        # 3. Live Logs Tab
         logs_widget = QWidget()
         logs_layout = QVBoxLayout(logs_widget)
         logs_layout.setContentsMargins(5, 5, 5, 5)
@@ -1260,17 +1870,8 @@ class SessionTab(QWidget):
         self.log_path_input.setEditable(True)
         self.log_path_input.lineEdit().setPlaceholderText("Enter custom path or select preset...")
         self.log_path_input.addItems([
-            "", 
-            "/var/log/syslog",
-            "/var/log/auth.log",
-            "/var/log/messages",
-            "/var/log/dmesg",
-            "/var/log/nginx/error.log",
-            "/var/log/nginx/access.log",
-            "/var/log/apache2/error.log",
-            "journalctl -f",
-            "journalctl -u nginx -f",
-            "docker logs -n 50 -f [container]"
+            "", "/var/log/syslog", "/var/log/auth.log", "/var/log/messages",
+            "/var/log/nginx/error.log", "journalctl -f", "docker logs -n 50 -f [container]"
         ])
         self.log_path_input.setCurrentText("")
         self.log_path_input.lineEdit().returnPressed.connect(self.start_log_tail)
@@ -1301,14 +1902,286 @@ class SessionTab(QWidget):
         logs_layout.addWidget(self.log_display)
         self.bottom_tabs.addTab(logs_widget, "Live Logs")
 
+        self.main_splitter.addWidget(self.browser_splitter)
         self.main_splitter.addWidget(self.bottom_tabs)
+        
+        main_spl_state = self.main_app.app_settings.get('main_splitter')
+        if main_spl_state: 
+            self.main_splitter.restoreState(QByteArray.fromHex(main_spl_state.encode('utf-8')))
+        else:
+            self.main_splitter.setSizes([450, 300])
+
+        browser_spl_state = self.main_app.app_settings.get('browser_splitter')
+        if browser_spl_state: 
+            self.browser_splitter.restoreState(QByteArray.fromHex(browser_spl_state.encode('utf-8')))
+
         layout.addWidget(self.main_splitter)
+
+    def launch_monitor(self):
+        if not self.monitor_window:
+            self.monitor_window = ServerMonitorWindow(self)
+        self.monitor_window.show()
+        self.monitor_window.activateWindow()
 
     def on_theme_changed(self, index):
         self.main_app.set_theme(index)
 
     # ----------------------------------------------------
-    # CORE ASYNC METHODS
+    # SFTP BRIDGE (IN-MEMORY PROXY & RSYNC INJECTION)
+    # ----------------------------------------------------
+    async def run_bridge_transfer(self, src_path, dst_path, direction, row_index):
+        try:
+            if direction == 'left_to_right':
+                src_sftp = self.left_sftp_client
+                dst_sftp = self.sftp_client
+            else:
+                src_sftp = self.sftp_client
+                dst_sftp = self.left_sftp_client
+                
+            def progress_cb(transferred, total):
+                task = self.transfer_tasks.get(row_index)
+                if task and task.cancelled(): raise asyncio.CancelledError()
+                if total > 0: self.update_progress(row_index, int((transferred / total) * 100))
+
+            async def transfer_item(s_path, d_path):
+                st = await src_sftp.stat(s_path)
+                if stat.S_ISDIR(st.permissions):
+                    try: await dst_sftp.mkdir(d_path)
+                    except Exception: pass
+                    for entry in await src_sftp.readdir(s_path):
+                        if entry.filename in ('.', '..'): continue
+                        await transfer_item(f"{s_path.rstrip('/')}/{entry.filename}", f"{d_path.rstrip('/')}/{entry.filename}")
+                else:
+                    file_size = st.size
+                    async with src_sftp.open(s_path, 'rb') as f_in:
+                        async with dst_sftp.open(d_path, 'wb') as f_out:
+                            transferred = 0
+                            while True:
+                                task = self.transfer_tasks.get(row_index)
+                                if task and task.cancelled(): raise asyncio.CancelledError()
+                                chunk = await f_in.read(1024 * 1024)
+                                if not chunk: break
+                                await f_out.write(chunk)
+                                transferred += len(chunk)
+                                progress_cb(transferred, file_size)
+
+            self.sync_log_view.appendPlainText(f"[Bridge] Starting Memory Proxy: {src_path} -> {dst_path}")
+            await transfer_item(src_path, dst_path)
+            self.transfer_complete(row_index, 'bridge')
+            
+            if direction == 'left_to_right':
+                asyncio.create_task(self.load_remote_directory(self.current_remote_path, record_history=False))
+            else:
+                asyncio.create_task(self.load_left_remote_directory(self.current_left_remote_path, record_history=False))
+                
+        except asyncio.CancelledError:
+            self.transfer_error(row_index, "Cancelled")
+        except Exception as e:
+            self.transfer_error(row_index, str(e))
+
+    def start_bridge_transfer(self, src_path, dst_path, direction):
+        row = self.queue_model.rowCount()
+        self.queue_model.insertRow(row)
+        dir_icon = "L->R" if direction == "left_to_right" else "R->L"
+        self.queue_model.setItem(row, 0, QStandardItem(dir_icon))
+        self.queue_model.item(row, 0).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.queue_model.setItem(row, 1, QStandardItem(f"🌉 {os.path.basename(src_path)}"))
+        
+        status_item = QStandardItem("Bridging...")
+        status_item.setForeground(QColor("#a855f7")) 
+        self.queue_model.setItem(row, 2, status_item)
+        
+        pb = QProgressBar(); pb.setValue(0)
+        self.queue_table.setIndexWidget(self.queue_model.index(row, 3), pb)
+
+        task = asyncio.create_task(self.run_bridge_transfer(src_path, dst_path, direction, row))
+        self.transfer_tasks[row] = task
+        
+        self.update_queue_badge()
+        self.bottom_tabs.setCurrentIndex(0)
+
+    async def run_rsync_transfer(self, src_path, dst_path, direction):
+        self.bottom_tabs.setCurrentIndex(2) 
+        self.sync_log_view.appendPlainText(f"\n[rsync] Initiating direct transfer: {src_path} -> {dst_path}")
+        
+        target_host, target_port, target_user, target_pass = "", 22, "", ""
+        if direction == 'left_to_right':
+            src_conn = self.left_ssh_conn
+            target_host, target_port, target_user, target_pass = self.host, self.port, self.user, self.password
+        else:
+            src_conn = self.ssh_conn
+            site_name = self.left_source_combo.currentText().replace("🌐 ", "")
+            site_data = self.main_app.sidebar.sites.get(site_name, {})
+            target_host = site_data.get('host', '')
+            target_port = site_data.get('port', 22)
+            target_user = site_data.get('user', '')
+            target_pass = keyring.get_password("nova_sftp", site_name) or ""
+
+        if target_pass:
+            check_sshpass = await src_conn.run("command -v sshpass")
+            if check_sshpass.exit_status != 0:
+                self.sync_log_view.appendPlainText("[rsync] Warning: 'sshpass' is not installed on the source server. Transfer may hang if SSH keys are not set up!")
+                cmd = f"rsync -avz --progress -e 'ssh -p {target_port} -o StrictHostKeyChecking=no' \"{src_path}\" \"{target_user}@{target_host}:{dst_path}\""
+            else:
+                safe_pass = target_pass.replace("'", "'\\''")
+                cmd = f"sshpass -p '{safe_pass}' rsync -avz --progress -e 'ssh -p {target_port} -o StrictHostKeyChecking=no' \"{src_path}\" \"{target_user}@{target_host}:{dst_path}\""
+        else:
+            cmd = f"rsync -avz --progress -e 'ssh -p {target_port} -o StrictHostKeyChecking=no' \"{src_path}\" \"{target_user}@{target_host}:{dst_path}\""
+
+        try:
+            process = await src_conn.create_process(cmd)
+            while True:
+                data = await process.stdout.read(1024)
+                if not data:
+                    break
+                self.sync_log_view.insertPlainText(data.replace('\r', ''))
+                self.sync_log_view.moveCursor(QTextCursor.MoveOperation.End)
+                
+            err = await process.stderr.read()
+            if err:
+                self.sync_log_view.appendPlainText(f"\n[rsync Error] {err}")
+                
+            self.sync_log_view.appendPlainText(f"\n[rsync] Transfer completed with exit status {process.exit_status}")
+            
+            asyncio.create_task(self.load_remote_directory(self.current_remote_path, record_history=False))
+            if self.left_mode == 'remote':
+                asyncio.create_task(self.load_left_remote_directory(self.current_left_remote_path, record_history=False))
+                
+        except Exception as e:
+            self.sync_log_view.appendPlainText(f"\n[rsync Exception] {str(e)}")
+
+    # ----------------------------------------------------
+    # LEFT PANE CONNECTION METHODS
+    # ----------------------------------------------------
+    def on_left_source_changed(self, index):
+        if index == 0:
+            self.left_mode = 'local'
+            self.left_stack.setCurrentIndex(0)
+            self.set_local_path(self.main_app.local_home_path)
+        else:
+            self.left_mode = 'remote'
+            self.left_stack.setCurrentIndex(1)
+            site_name = self.left_source_combo.currentText().replace("🌐 ", "")
+            asyncio.create_task(self.connect_left_remote(site_name))
+
+    async def connect_left_remote(self, site_name):
+        self.local_path_input.setText(f"Connecting to {site_name}...")
+        site_data = self.main_app.sidebar.sites.get(site_name)
+        if not site_data: return
+        
+        if self.left_sftp_client: self.left_sftp_client.exit()
+        if self.left_ssh_conn: self.left_ssh_conn.close()
+        
+        try:
+            host = site_data.get('host')
+            port = site_data.get('port', 22)
+            user = site_data.get('user')
+            key_path = site_data.get('key_path')
+            password = keyring.get_password("nova_sftp", site_name)
+            
+            connect_kwargs = {'host': host, 'port': port, 'username': user, 'known_hosts': None}
+            if key_path and os.path.exists(key_path):
+                connect_kwargs['client_keys'] = [key_path]
+                if password: connect_kwargs['passphrase'] = password
+            elif password:
+                connect_kwargs['password'] = password
+            
+            self.left_ssh_conn = await asyncssh.connect(**connect_kwargs)
+            self.left_sftp_client = await self.left_ssh_conn.start_sftp_client()
+            await self.load_left_remote_directory('.')
+        except Exception as e:
+            QMessageBox.critical(self, "Left Pane Connection Error", str(e))
+            self.local_path_input.setText(f"Failed connecting to {site_name}")
+
+    async def load_left_remote_directory(self, path, record_history=True):
+        if not self.left_sftp_client: return
+        if path == '.': path = self.main_app.app_settings.get("remote_homes", {}).get(self.left_source_combo.currentText().replace("🌐 ", ""), '.')
+        if record_history and self.current_left_remote_path != "." and self.current_left_remote_path != path:
+            self.left_remote_history.append(self.current_left_remote_path)
+            self.local_back_btn.setEnabled(True)
+            
+        self.local_path_input.setText(f"Loading {path}...")
+        try:
+            if path == '.': path = await self.left_sftp_client.realpath('.')
+            entries = await self.left_sftp_client.readdir(path)
+            file_list = []
+            for e in entries:
+                if e.filename in ['.', '..']: continue
+                is_dir = stat.S_ISDIR(e.attrs.permissions)
+                file_list.append({
+                    'name': e.filename, 'is_dir': is_dir,
+                    'mode': e.attrs.permissions, 'size': getattr(e.attrs, 'size', 0), 
+                    'mtime': getattr(e.attrs, 'mtime', 0),
+                    'uid': getattr(e.attrs, 'uid', 0), 'gid': getattr(e.attrs, 'gid', 0)
+                })
+            file_list.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
+            
+            self.current_left_remote_path = path
+            self.left_remote_model.removeRows(0, self.left_remote_model.rowCount())
+            self.local_path_input.setText(path)
+
+            if path != '/':
+                up_item = QStandardItem("..")
+                up_item.setIcon(self.dir_icon)
+                up_item.setData({'is_dir': True, 'mode': 0, 'uid': 0, 'gid': 0}, Qt.ItemDataRole.UserRole)
+                self.left_remote_model.appendRow([up_item, QStandardItem(""), QStandardItem(""), QStandardItem("")])
+
+            for f in file_list:
+                name_item = QStandardItem(f['name'])
+                name_item.setIcon(get_colored_icon(self.style(), f['name'], f['is_dir']))
+                name_item.setData({'is_dir': f['is_dir'], 'mode': f['mode'], 'uid': f['uid'], 'gid': f['gid']}, Qt.ItemDataRole.UserRole)
+                
+                size_str = "" if f['is_dir'] else format_size(f['size'])
+                size_item = QStandardItem(size_str)
+                size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                
+                date_str = format_date(f['mtime'])
+                date_item = QStandardItem(date_str)
+                date_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                
+                mode_str = stat.filemode(f['mode'])
+                mode_item = QStandardItem(mode_str)
+                
+                self.left_remote_model.appendRow([name_item, size_item, date_item, mode_item])
+                
+        except Exception as e:
+            QMessageBox.critical(self, "Left SFTP Error", str(e))
+            self.local_path_input.setText("Error loading directory.")
+
+    def on_left_remote_double_click(self, proxy_index):
+        source_index = self.left_proxy_model.mapToSource(proxy_index)
+        item = self.left_remote_model.item(source_index.row(), 0)
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if data['is_dir']:
+            folder = item.text()
+            new_path = "/".join(self.current_left_remote_path.rstrip('/').split('/')[:-1]) if folder == ".." else f"{self.current_left_remote_path.rstrip('/')}/{folder}"
+            asyncio.create_task(self.load_left_remote_directory(new_path or "/"))
+
+    def on_left_remote_context_menu(self, position):
+        if self.current_left_remote_path == ".": return
+        proxy_index = self.left_remote_view.indexAt(position)
+        if not proxy_index.isValid(): return
+        
+        source_index = self.left_proxy_model.mapToSource(proxy_index)
+        item = self.left_remote_model.item(source_index.row(), 0)
+        if item.text() == "..": return
+        
+        menu = QMenu()
+        bridge_action = menu.addAction("🌉 Bridge Transfer to Right Pane (Memory Proxy)")
+        rsync_action = menu.addAction("🚀 Direct Transfer to Right Pane (rsync)")
+        
+        action = menu.exec(self.left_remote_view.viewport().mapToGlobal(position))
+        if action == bridge_action:
+            src = f"{self.current_left_remote_path.rstrip('/')}/{item.text()}"
+            dst = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
+            self.start_bridge_transfer(src, dst, 'left_to_right')
+        elif action == rsync_action:
+            src = f"{self.current_left_remote_path.rstrip('/')}/{item.text()}"
+            dst = self.current_remote_path.rstrip('/') + '/'
+            asyncio.create_task(self.run_rsync_transfer(src, dst, 'left_to_right'))
+
+    # ----------------------------------------------------
+    # CORE ASYNC METHODS (Right Pane & Transfers)
     # ----------------------------------------------------
 
     async def load_remote_directory(self, path, record_history=True):
@@ -1648,6 +2521,12 @@ class SessionTab(QWidget):
         layout.addWidget(text_edit)
         preview_dialog.exec()
 
+    def launch_monitor(self):
+        if not self.monitor_window:
+            self.monitor_window = ServerMonitorWindow(self)
+        self.monitor_window.show()
+        self.monitor_window.activateWindow()
+
     def start_log_tail(self):
         path = self.log_path_input.currentText().strip()
         if not path: return
@@ -1781,6 +2660,8 @@ class SessionTab(QWidget):
         if pb: pb.setValue(100)
         if direction == "upload":
             asyncio.create_task(self.load_remote_directory(self.current_remote_path, record_history=False))
+        elif direction == 'bridge':
+            pass 
             
         self.update_queue_badge()
 
@@ -1812,24 +2693,48 @@ class SessionTab(QWidget):
         self.local_view.setRootIndex(self.local_model.index(target_path))
         self.local_path_input.setText(target_path)
 
+    # ----------------------------------------------------
+    # DUAL-MODE NAVIGATION
+    # ----------------------------------------------------
+
     def go_local_back(self):
-        if self.local_history:
-            prev = self.local_history.pop()
-            self.local_back_btn.setEnabled(len(self.local_history) > 0)
-            self.set_local_path(prev, record_history=False)
+        if self.left_mode == 'local':
+            if self.local_history:
+                prev = self.local_history.pop()
+                self.local_back_btn.setEnabled(len(self.local_history) > 0)
+                self.set_local_path(prev, record_history=False)
+        else:
+            if self.left_remote_history:
+                prev = self.left_remote_history.pop()
+                self.local_back_btn.setEnabled(len(self.left_remote_history) > 0)
+                asyncio.create_task(self.load_left_remote_directory(prev, record_history=False))
 
     def go_local_up(self):
-        curr = self.local_path_input.text().strip()
-        if not curr:
-            return
-        qdir = QDir(curr)
-        if qdir.cdUp():
-            self.set_local_path(os.path.normpath(qdir.absolutePath()))
-        elif sys.platform == "win32":
-            self.set_local_path("")
+        if self.left_mode == 'local':
+            curr = self.local_path_input.text().strip()
+            if not curr: return
+            qdir = QDir(curr)
+            if qdir.cdUp():
+                self.set_local_path(os.path.normpath(qdir.absolutePath()))
+            elif sys.platform == "win32":
+                self.set_local_path("")
+        else:
+            if self.current_left_remote_path not in [".", "/"]:
+                parent = "/".join(self.current_left_remote_path.rstrip('/').split('/')[:-1]) or "/"
+                asyncio.create_task(self.load_left_remote_directory(parent))
 
-    def go_local_home(self): self.set_local_path(self.main_app.local_home_path)
-    def on_local_path_entered(self): self.set_local_path(self.local_path_input.text().strip())
+    def go_local_home(self):
+        if self.left_mode == 'local':
+            self.set_local_path(self.main_app.local_home_path)
+        else:
+            asyncio.create_task(self.load_left_remote_directory('.'))
+
+    def on_local_path_entered(self):
+        if self.left_mode == 'local':
+            self.set_local_path(self.local_path_input.text().strip())
+        else:
+            asyncio.create_task(self.load_left_remote_directory(self.local_path_input.text().strip()))
+
     def on_local_double_click(self, index):
         if self.local_model.isDir(index): self.set_local_path(self.local_model.filePath(index))
 
@@ -1932,6 +2837,7 @@ class SessionTab(QWidget):
         new_folder_action = menu.addAction("New Folder")
         download_action, rename_action, delete_action, prop_action, set_home_action = None, None, None, None, None
         tar_action, untar_action, zip_action, unzip_action = None, None, None, None
+        bridge_action, rsync_action = None, None
         item, data = None, None
 
         if proxy_index.isValid():
@@ -1941,6 +2847,11 @@ class SessionTab(QWidget):
             if item.text() != "..":
                 menu.addSeparator()
                 download_action = menu.addAction(f"Download {'Folder' if data['is_dir'] else 'File'}")
+                
+                if self.left_mode == 'remote':
+                    bridge_action = menu.addAction("🌉 Bridge Transfer to Left Pane (Memory Proxy)")
+                    rsync_action = menu.addAction("🚀 Direct Transfer to Left Pane (rsync)")
+                    
                 rename_action = menu.addAction("Rename")
                 
                 custom_menu = menu.addMenu("Custom Commands")
@@ -1971,11 +2882,20 @@ class SessionTab(QWidget):
             if ok and name: 
                 asyncio.create_task(self.run_remote_command_async('mkdir', f"{self.current_remote_path.rstrip('/')}/{name}"))
         elif action == download_action and item:
-            local_idx = self.local_view.currentIndex()
-            local_dir = self.local_model.filePath(local_idx) if local_idx.isValid() else QDir.homePath()
-            if not local_dir or not os.path.isdir(local_dir):
-                local_dir = os.path.dirname(local_dir) if local_dir else QDir.homePath()
-            self.start_transfer(os.path.join(local_dir, item.text()), f"{self.current_remote_path.rstrip('/')}/{item.text()}", "download")
+            if self.left_mode == 'local':
+                local_idx = self.local_view.currentIndex()
+                local_dir = self.local_model.filePath(local_idx) if local_idx.isValid() else QDir.homePath()
+                if not local_dir or not os.path.isdir(local_dir):
+                    local_dir = os.path.dirname(local_dir) if local_dir else QDir.homePath()
+                self.start_transfer(os.path.join(local_dir, item.text()), f"{self.current_remote_path.rstrip('/')}/{item.text()}", "download")
+        elif action == bridge_action and item:
+            src = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
+            dst = f"{self.current_left_remote_path.rstrip('/')}/{item.text()}"
+            self.start_bridge_transfer(src, dst, 'right_to_left')
+        elif action == rsync_action and item:
+            src = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
+            dst = self.current_left_remote_path.rstrip('/') + '/'
+            asyncio.create_task(self.run_rsync_transfer(src, dst, 'right_to_left'))
         elif action == rename_action and item:
             new_name, ok = QInputDialog.getText(self, "Rename", "Enter new name:", text=item.text())
             if ok and new_name and new_name != item.text():
@@ -2028,6 +2948,9 @@ class SessionTab(QWidget):
             asyncio.create_task(self.run_remote_command_async('exec', '', cmd))
 
     def close_tab_resources(self):
+        if getattr(self, 'monitor_window', None):
+            self.monitor_window.is_polling = False
+            self.monitor_window.close()
         if getattr(self, 'live_sync_observer', None):
             self.live_sync_observer.stop()
             self.live_sync_observer.join()
@@ -2040,6 +2963,9 @@ class SessionTab(QWidget):
         
         if getattr(self, 'sftp_client', None): self.sftp_client.exit()
         if getattr(self, 'ssh_conn', None): self.ssh_conn.close()
+        
+        if getattr(self, 'left_sftp_client', None): self.left_sftp_client.exit()
+        if getattr(self, 'left_ssh_conn', None): self.left_ssh_conn.close()
 
 # ==========================================
 # MAIN WINDOW & TABBED SESSION CONTROLLER
@@ -2123,16 +3049,13 @@ class NovaSFTP(QMainWindow):
 
         self.global_splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # Sidebar Layer
         self.sidebar = SidebarWidget(self)
         self.global_splitter.addWidget(self.sidebar)
 
-        # Main Workspace Layer
         self.workspace_panel = QWidget()
         workspace_layout = QVBoxLayout(self.workspace_panel)
         workspace_layout.setContentsMargins(15, 15, 15, 15)
 
-        # Quick Connect Top Bar
         top_bar = QWidget()
         top_bar.setStyleSheet("background-color: transparent; border: none;")
         top_layout = QHBoxLayout(top_bar)
@@ -2175,7 +3098,6 @@ class NovaSFTP(QMainWindow):
         
         workspace_layout.addWidget(top_bar)
 
-        # Session Tabs
         self.session_tabs = QTabWidget()
         self.session_tabs.setTabsClosable(True)
         self.session_tabs.tabCloseRequested.connect(self.close_tab)
@@ -2190,7 +3112,6 @@ class NovaSFTP(QMainWindow):
 
         main_layout.addWidget(self.global_splitter)
 
-        # Setup Command Palette Shortcut
         cmd_action = QAction(self)
         cmd_action.setShortcut(QKeySequence("Ctrl+P"))
         cmd_action.triggered.connect(self.show_command_palette)
@@ -2303,7 +3224,7 @@ class NovaSFTP(QMainWindow):
 if __name__ == "__main__":
     if sys.platform == "win32":
         import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("litenova.novasftp.client.1.4")
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("litenova.novasftp.client.1.5")
 
     app = QApplication(sys.argv)
     app.setApplicationName("Nova SFTP")
