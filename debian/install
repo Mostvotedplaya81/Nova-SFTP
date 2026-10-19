@@ -1,4 +1,6 @@
-main.py usr/share/nova-sftp
-nova-sftp.png usr/share/icons/hicolor/scalable/apps
-nova-sftp.desktop usr/share/applications
-nova-sftp usr/bin
+main.py usr/share/nova-sftp/
+ui/* usr/share/nova-sftp/ui/
+features/* usr/share/nova-sftp/features/
+utils/* usr/share/nova-sftp/utils/
+nova-sftp.png usr/share/icons/hicolor/scalable/apps/
+nova-sftp.desktop usr/share/applications/
