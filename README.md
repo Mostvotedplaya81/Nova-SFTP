@@ -54,3 +54,34 @@ sudo apt update
 
 # Install Nova SFTP
 sudo apt install nova-sftp
+
+Running from Source
+
+Ensure you have Python 3.10+ and pip installed on your system.
+
+    Clone the repository:
+    Bash
+
+    git clone [https://github.com/Mostvotedplaya81/Nova-SFTP.git](https://github.com/Mostvotedplaya81/Nova-SFTP.git)
+    cd Nova-SFTP
+
+    Install Python dependencies:
+    (Nova SFTP will automatically check for and install missing packages on first run, or install manually):
+    Bash
+
+    pip install PyQt6 asyncssh qasync keyring watchdog
+
+    Run the application:
+    Bash
+
+    python3 main.py
+
+Packaging & Distribution
+
+    Linux (Debian / Launchpad PPA): Contains full Debian packaging rules inside debian/. To build a signed source package locally: debuild -S -sa
+
+    Windows (GitHub Actions + PyInstaller): Automatically compiles Nova-SFTP.exe and publishes to GitHub Releases via .github/workflows/windows-build.yml.
+
+License
+
+This project is licensed under the GNU General Public License v3.0 — see the LICENSE file for details.
