@@ -1,3 +1,11 @@
+nova-sftp (1.5.0-4) jammy; urgency=medium
+
+  * Feature: Automated Macros & Snippets for saving and running multi-step deployment scripts.
+  * Finalized modular architecture UI split.
+  * Fix: Added /usr/bin/ executable wrapper and restored desktop launcher.
+
+ -- Nicky <streamit.litenova.me@gmail.com>  Mon, 19 Oct 2026 10:55:00 +0100
+
 nova-sftp (1.5.0-3) jammy; urgency=medium
 
   * Architectural overhaul: transition from monolithic main.py to modular framework.

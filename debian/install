@@ -1,3 +1,4 @@
+nova-sftp usr/bin/
 main.py usr/share/nova-sftp/
 ui/* usr/share/nova-sftp/ui/
 features/* usr/share/nova-sftp/features/

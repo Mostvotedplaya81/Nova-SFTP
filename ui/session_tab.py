@@ -26,6 +26,7 @@ from features.dialogs import SyncConfigDialog, PropertiesDialog
 from features.text_editor import TextEditorDialog, EditorSyntaxHighlighter
 from features.command_center import ServerMonitorWindow
 from features.deep_search import DeepSearchWidget
+from features.macros import MacroManagerWidget
 
 class LocalChangeHandler(FileSystemEventHandler):
     def __init__(self, loop, callback):
@@ -400,6 +401,10 @@ class SessionTab(QWidget):
         self.deep_search_tab = DeepSearchWidget(self)
         self.bottom_tabs.addTab(self.deep_search_tab, "Deep Search")
 
+        # 5. Macros & Snippets Tab
+        self.macros_tab = MacroManagerWidget(self)
+        self.bottom_tabs.addTab(self.macros_tab, "Macros & Snippets")
+
         self.main_splitter.addWidget(self.browser_splitter)
         self.main_splitter.addWidget(self.bottom_tabs)
         
@@ -414,6 +419,20 @@ class SessionTab(QWidget):
             self.browser_splitter.restoreState(QByteArray.fromHex(browser_spl_state.encode('utf-8')))
 
         layout.addWidget(self.main_splitter)
+
+    # --- Macro Execution Injection ---
+    def execute_macro(self, script):
+        if hasattr(self, 'term_process') and self.term_process:
+            self.bottom_tabs.setCurrentIndex(1)
+            self.term_display.appendPlainText(f"\n\n--- Running Macro ---\n")
+            
+            cmd = script
+            if not cmd.endswith('\n'):
+                cmd += '\n'
+            
+            self.term_process.stdin.write(cmd)
+        else:
+            QMessageBox.warning(self, "Terminal Offline", "Interactive terminal is not connected.")
 
     def launch_monitor(self):
         if not self.monitor_window:
