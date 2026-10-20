@@ -4,27 +4,29 @@
 
 ---
 
-## 🔥 What's New in v1.5.0 (The Command Center Update)
+## 🔥 What's New in v1.5.x (The Modular & Macros Updates)
 
-* **Standalone Command Center:** A completely overhauled, Cura-inspired server telemetry dashboard.
-* **Live Scrolling Graphs:** Real-time, custom-painted line graphs plotting CPU, RAM, Swap, and Load Averages with zero-agent background polling.
-* **Graphical Stack Management:** Manage your server stack natively with dedicated tabs for Top Processes, Docker Containers, and Systemd Services (complete with context menus to Start, Stop, Restart, Force Kill, or view live `journalctl` crash logs).
-* **The SFTP Bridge (Dual-Remote Browser):** Swap the local file browser for a second remote server connection. Drag and drop files between two separate Linux servers seamlessly.
-* **In-Memory Proxy & Native `rsync`:** Bridge transfers can route through your local RAM (bypassing the hard drive) or trigger native datacenter-to-datacenter `rsync` injections for gigabit speeds.
+- **Automated Macros & Snippets:** Write, save, and 1-click execute multi-step deployment scripts directly into the active interactive terminal.
+- **Deep Remote Search Engine:** Non-blocking native `find` and `grep` execution for rapid file and content searching across your server.
+- **Advanced SSH Key Manager:** Generate Ed25519/RSA keypairs and push public keys to remote servers with a single click.
+- **Standalone Command Center:** A completely overhauled, Cura-inspired server telemetry dashboard with live scrolling graphs (CPU, RAM, Swap, Load).
+- **Graphical Stack Management:** Manage your server stack natively with dedicated tabs for Top Processes, Docker Containers, and Systemd Services.
+- **The SFTP Bridge (Dual-Remote Browser):** Swap the local file browser for a second remote server connection. Drag and drop files between two separate Linux servers seamlessly using in-memory proxying or native `rsync`.
+- **Modular Enterprise Architecture:** The massive monolithic codebase has been dismantled into a lightweight `main.py` bootloader with deeply organized `ui/` and `features/` directories.
 
 ---
 
 ## Key Features
 
-* **Multi-Tab Sessions:** Manage multiple remote servers simultaneously in isolated tabs with persistent layout memory.
-* **Smart Auto-Resume:** Automatically detects interrupted file transfers and resumes from the exact byte on reconnect.
-* **Secure Authentication:** Connect via password or SSH private keys (with native system keyring integration via `keyring`).
-* **Concurrent Transfer Queue:** Upload and download files or recursive directories in parallel with real-time progress bars and individual task cancellation.
-* **Live Sync Engine:** Watch local directories with `watchdog` to automatically push saved changes in real time.
-* **Live Log Tailing & Interactive Terminal:** Stream `syslog`, `nginx` logs, `journalctl -f`, or `docker logs` directly inside a dedicated tab alongside an embedded interactive shell.
-* **Advanced Code Editor:** Integrated text editor with syntax highlighting, find/replace, and font scaling for quick config edits.
-* **Spacebar Quick Look:** Press `Spacebar` on any remote file for an instant syntax-highlighted preview.
-* **Dynamic Theme Switcher:** Instantly switch between **Midnight Dark**, **Clean Light**, **Dracula**, and **Monokai**.
+- **Multi-Tab Sessions:** Manage multiple remote servers simultaneously in isolated tabs with persistent layout memory.
+- **Smart Auto-Resume:** Automatically detects interrupted file transfers and resumes from the exact byte on reconnect.
+- **Secure Authentication:** Connect via password or SSH private keys (with native system keyring integration via `keyring`).
+- **Concurrent Transfer Queue:** Upload and download files or recursive directories in parallel with real-time progress bars and individual task cancellation.
+- **Live Sync Engine:** Watch local directories with `watchdog` to automatically push saved changes in real time.
+- **Live Log Tailing & Interactive Terminal:** Stream `syslog`, `nginx` logs, `journalctl -f`, or `docker logs` directly inside a dedicated tab alongside an embedded interactive shell.
+- **Advanced Code Editor:** Integrated text editor with syntax highlighting, find/replace, and font scaling for quick config edits.
+- **Spacebar Quick Look:** Press `Spacebar` on any remote file for an instant syntax-highlighted preview.
+- **Dynamic Theme Switcher:** Instantly switch between **Midnight Dark**, **Clean Light**, **Dracula**, and **Monokai**.
 
 ---
 
@@ -52,40 +54,3 @@ sudo apt update
 
 # Install Nova SFTP
 sudo apt install nova-sftp
-```
-
----
-
-## Running from Source
-
-Ensure you have Python 3.10+ and `pip` installed on your system.
-
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/Mostvotedplaya81/Nova-SFTP.git](https://github.com/Mostvotedplaya81/Nova-SFTP.git)
-   cd Nova-SFTP
-   ```
-
-2. **Install Python dependencies:**
-   *(Nova SFTP will automatically check for and install missing packages on first run, or install manually)*:
-   ```bash
-   pip install PyQt6 asyncssh qasync keyring watchdog
-   ```
-
-3. **Run the application:**
-   ```bash
-   python3 main.py
-   ```
-
----
-
-## Packaging & Distribution
-
-* **Linux (Debian / Launchpad PPA):** Contains full Debian packaging rules inside `debian/`. To build a signed source package locally: `debuild -S -sa`
-* **Windows (GitHub Actions + PyInstaller):** Automatically compiles `Nova-SFTP.exe` and publishes to GitHub Releases via `.github/workflows/windows-build.yml`.
-
----
-
-## License
-
-This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
