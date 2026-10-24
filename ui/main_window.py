@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, QByteArray, QDir
 from ui.themes import CLEAN_LIGHT_THEME, DRACULA_THEME, MONOKAI_THEME, PREMIUM_DARK_THEME
 from ui.sidebar import SidebarWidget
 from ui.session_tab import SessionTab
-from features.key_manager import SSHKeyManagerDialog
+from features.key_manager import SSHKeyManagerWindow
 from features.dialogs import CommandPalette
 
 def resource_path(relative_path):

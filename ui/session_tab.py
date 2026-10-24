@@ -1,10 +1,15 @@
 import os
+import sys
 import re
 import stat
 import time
+import json
+import shlex
+import shutil
 import asyncio
 import asyncssh
 import keyring
+import hashlib
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from qasync import asyncSlot
@@ -13,11 +18,14 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox,
     QLabel, QSplitter, QToolButton, QLineEdit, QStackedWidget,
     QTreeView, QTableView, QHeaderView, QMenu, QProgressBar,
-    QMessageBox, QDialog, QPlainTextEdit, QTabWidget, QAbstractItemView,
+    QMessageBox, QDialog, QPlainTextEdit, QTabWidget,
     QInputDialog, QStyle
 )
-from PyQt6.QtGui import QStandardItemModel, QStandardItem, QColor, QFileSystemModel, QTextCursor
-from PyQt6.QtCore import Qt, QDir, pyqtSignal, QSortFilterProxyModel, QByteArray
+from PyQt6.QtGui import (
+    QStandardItemModel, QStandardItem, QColor, QFileSystemModel,
+    QTextCursor, QGuiApplication
+)
+from PyQt6.QtCore import Qt, QDir, pyqtSignal, QSortFilterProxyModel, QByteArray, QEvent, QTimer
 
 from utils.formatting import format_size, format_date
 from utils.icons import get_colored_icon
@@ -27,6 +35,80 @@ from features.text_editor import TextEditorDialog, EditorSyntaxHighlighter
 from features.command_center import ServerMonitorWindow
 from features.deep_search import DeepSearchWidget
 from features.macros import MacroManagerWidget
+from features.cron_manager import CronManagerWindow
+from features.key_manager import SSHKeyManagerWindow
+
+
+def fit_window_to_screen(window, pref_w=1200, pref_h=780):
+    screen = QGuiApplication.primaryScreen()
+    if not screen:
+        window.resize(pref_w, pref_h)
+        return
+    avail = screen.availableGeometry()
+    max_w = int(avail.width() * 0.92)
+    max_h = int(avail.height() * 0.88)
+    w = min(max(window.width(), pref_w), max_w)
+    h = min(max(window.height(), pref_h), max_h)
+    window.resize(w, h)
+    x = avail.x() + (avail.width() - w) // 2
+    y = avail.y() + (avail.height() - h) // 2
+    window.move(max(avail.x(), x), max(avail.y(), y))
+
+
+class TerminalLineEdit(QLineEdit):
+    tab_pressed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.history_file = os.path.expanduser("~/.nova_term_history.json")
+        self.history = self.load_history()
+        self.history_index = len(self.history)
+        self.draft_command = ""
+
+    def load_history(self):
+        if os.path.exists(self.history_file):
+            try:
+                with open(self.history_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list): return data[-200:]
+            except Exception: pass
+        return []
+
+    def record_command(self, cmd):
+        cmd = cmd.strip()
+        if not cmd: return
+        if not self.history or self.history[-1] != cmd:
+            self.history.append(cmd)
+            if len(self.history) > 200: self.history = self.history[-200:]
+            try:
+                with open(self.history_file, "w", encoding="utf-8") as f: json.dump(self.history, f)
+            except Exception: pass
+        self.history_index = len(self.history)
+        self.draft_command = ""
+
+    def event(self, event):
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Tab:
+            self.tab_pressed.emit()
+            return True
+        return super().event(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Up:
+            if self.history and self.history_index > 0:
+                if self.history_index == len(self.history): self.draft_command = self.text()
+                self.history_index -= 1
+                self.setText(self.history[self.history_index])
+                self.end(False)
+            return
+        elif event.key() == Qt.Key.Key_Down:
+            if self.history_index < len(self.history):
+                self.history_index += 1
+                if self.history_index == len(self.history): self.setText(self.draft_command)
+                else: self.setText(self.history[self.history_index])
+                self.end(False)
+            return
+        super().keyPressEvent(event)
+
 
 class LocalChangeHandler(FileSystemEventHandler):
     def __init__(self, loop, callback):
@@ -44,6 +126,7 @@ class LocalChangeHandler(FileSystemEventHandler):
         if current_time - self.last_triggered.get(path, 0) > 1.5:
             self.last_triggered[path] = current_time
             self.loop.call_soon_threadsafe(lambda: asyncio.create_task(self.callback(path)))
+
 
 class RemoteTreeView(QTreeView):
     files_dropped = pyqtSignal(list)
@@ -71,8 +154,90 @@ class RemoteTreeView(QTreeView):
                 data = item.data(Qt.ItemDataRole.UserRole)
                 if not data['is_dir'] and item.text() != "..":
                     self.quick_look_requested.emit(item.text())
-                    return 
+                    return
         super().keyPressEvent(event)
+
+
+class DockerComposeManagerDialog(QDialog):
+    def __init__(self, session_tab, remote_file_path, parent_dir):
+        super().__init__(session_tab.main_app)
+        self.session_tab = session_tab
+        self.remote_file_path = remote_file_path
+        self.parent_dir = parent_dir
+        
+        self.setWindowTitle(f"Docker Compose: {os.path.basename(remote_file_path)}")
+        self.resize(480, 380)
+        
+        self.setStyleSheet("""
+            QDialog { background-color: #09090b; }
+            QLabel { color: #f4f4f5; font-weight: bold; font-family: 'Segoe UI', sans-serif; font-size: 13px; }
+            QPlainTextEdit { background-color: #18181b; color: #a855f7; border: 1px solid #27272a; border-radius: 4px; font-family: 'Cascadia Mono', monospace; font-size: 13px; padding: 10px; }
+            QPushButton { background-color: #27272a; color: white; padding: 8px 12px; border-radius: 4px; font-weight: bold; border: none; }
+            QPushButton:hover { background-color: #3f3f46; }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("🐳 Stack Controls"))
+        
+        btn_layout = QHBoxLayout()
+        btn_up = QPushButton("▶ Up (-d)")
+        btn_up.setStyleSheet("background-color: #10b981; color: #09090b;")
+        btn_up.clicked.connect(lambda: self.run_action("up -d"))
+        
+        btn_down = QPushButton("⏹ Down")
+        btn_down.setStyleSheet("background-color: #ef4444; color: white;")
+        btn_down.clicked.connect(lambda: self.run_action("down"))
+        
+        btn_pull = QPushButton("🔄 Pull")
+        btn_pull.setStyleSheet("background-color: #3b82f6; color: white;")
+        btn_pull.clicked.connect(lambda: self.run_action("pull"))
+        
+        btn_layout.addWidget(btn_up)
+        btn_layout.addWidget(btn_down)
+        btn_layout.addWidget(btn_pull)
+        
+        layout.addLayout(btn_layout)
+        layout.addSpacing(10)
+        
+        layout.addWidget(QLabel("📦 Defined Services (Parsed from YAML):"))
+        self.services_list = QPlainTextEdit()
+        self.services_list.setReadOnly(True)
+        self.services_list.setPlainText("Querying Docker engine for services...")
+        layout.addWidget(self.services_list)
+        
+        btn_close = QPushButton("Close")
+        btn_close.clicked.connect(self.accept)
+        
+        bot_layout = QHBoxLayout()
+        bot_layout.addStretch()
+        bot_layout.addWidget(btn_close)
+        layout.addLayout(bot_layout)
+        
+        asyncio.create_task(self.load_services())
+
+    async def load_services(self):
+        try:
+            conn, _ = await self.session_tab.get_connection()
+            cmd = f"cd {shlex.quote(self.parent_dir)} && if command -v docker-compose &> /dev/null; then docker-compose -f {shlex.quote(os.path.basename(self.remote_file_path))} config --services 2>/dev/null; else docker compose -f {shlex.quote(os.path.basename(self.remote_file_path))} config --services 2>/dev/null; fi"
+            res = await conn.run(cmd)
+            if res.exit_status == 0 and res.stdout.strip():
+                services = res.stdout.strip().splitlines()
+                out = ""
+                for s in services:
+                    if s.strip() and not "WARN" in s:
+                        out += f"✔ {s.strip()}\n"
+                self.services_list.setPlainText(out)
+            else:
+                self.services_list.setPlainText("No services found or docker compose is not installed on remote server.")
+        except Exception as e:
+            self.services_list.setPlainText(f"Error querying stack: {str(e)}")
+
+    def run_action(self, action):
+        filename = shlex.quote(os.path.basename(self.remote_file_path))
+        cmd = f"cd {shlex.quote(self.parent_dir)} && if command -v docker-compose &> /dev/null; then docker-compose -f {filename} {action}; else docker compose -f {filename} {action}; fi"
+        self.session_tab.execute_macro(cmd)
+        self.accept()
+
 
 class SessionTab(QWidget):
     status_changed = pyqtSignal(str)
@@ -94,7 +259,10 @@ class SessionTab(QWidget):
         self.transfer_tasks = {}
         self.sync_running = False
         self.log_running = False
+        
         self.monitor_window = None
+        self.cron_window = None
+        self.key_window = None
         
         self.ssh_conn = None
         self.sftp_client = None
@@ -105,6 +273,9 @@ class SessionTab(QWidget):
         self.dir_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
 
         self.init_ui()
+        if not getattr(self.main_app, '_screen_fitted', False):
+            self.main_app._screen_fitted = True
+            QTimer.singleShot(0, lambda: fit_window_to_screen(self.main_app, 1220, 760))
         asyncio.create_task(self.connect_and_init())
 
     async def connect_and_init(self):
@@ -132,26 +303,35 @@ class SessionTab(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
 
         sync_bar = QHBoxLayout()
         
-        self.btn_monitor = QPushButton("📊 Launch Command Center")
+        self.btn_monitor = QPushButton("📊 Command Center")
         self.btn_monitor.setStyleSheet("background-color: #4f46e5; color: white;")
         self.btn_monitor.clicked.connect(self.launch_monitor)
+
+        self.btn_cron = QPushButton("⏰ Cron Scheduler")
+        self.btn_cron.setStyleSheet("background-color: #0ea5e9; color: white;")
+        self.btn_cron.clicked.connect(self.launch_cron_manager)
+
+        self.btn_keys = QPushButton("🔑 Key Vault")
+        self.btn_keys.setStyleSheet("background-color: #0d9488; color: white;")
+        self.btn_keys.clicked.connect(self.launch_key_manager)
         
         self.btn_live_sync = QPushButton("Live Sync: OFF")
         self.btn_live_sync.setCheckable(True)
         self.btn_live_sync.setStyleSheet("background-color: #64748b; color: white;")
         self.btn_live_sync.clicked.connect(self.toggle_live_sync)
         
-        self.sync_btn = QPushButton("Configure Sync Task...")
+        self.sync_btn = QPushButton("Sync Config...")
         self.sync_btn.setStyleSheet("background-color: #059669; color: white;")
         self.sync_btn.clicked.connect(self.open_sync_dialog)
         
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Midnight Dark", "Clean Light", "Dracula", "Monokai"])
-        self.theme_combo.setFixedWidth(140)
+        self.theme_combo.setFixedWidth(135)
         
         theme_map = {"dark": 0, "light": 1, "dracula": 2, "monokai": 3}
         current_theme = self.main_app.app_settings.get("theme", "dark")
@@ -159,8 +339,9 @@ class SessionTab(QWidget):
         self.theme_combo.currentIndexChanged.connect(self.on_theme_changed)
         
         sync_bar.addWidget(self.btn_monitor)
-        sync_bar.addSpacing(15)
-        sync_bar.addWidget(QLabel("Directory Sync:", styleSheet="font-weight: bold; color: #10b981;"))
+        sync_bar.addWidget(self.btn_cron)
+        sync_bar.addWidget(self.btn_keys)
+        sync_bar.addSpacing(10)
         sync_bar.addWidget(self.btn_live_sync)
         sync_bar.addWidget(self.sync_btn)
         sync_bar.addStretch()
@@ -170,13 +351,14 @@ class SessionTab(QWidget):
         self.main_splitter = QSplitter(Qt.Orientation.Vertical)
         self.browser_splitter = QSplitter(Qt.Orientation.Horizontal)
 
+        # --- LOCAL PANE ---
         local_widget = QWidget()
         local_layout = QVBoxLayout(local_widget)
         local_layout.setContentsMargins(0, 0, 0, 0)
         
         local_header_layout = QHBoxLayout()
         self.left_source_combo = QComboBox()
-        self.left_source_combo.setStyleSheet("font-weight: bold; font-size: 13px; padding: 5px;")
+        self.left_source_combo.setStyleSheet("font-weight: bold; font-size: 13px; padding: 4px;")
         self.left_source_combo.addItem("💻 Local System (Default)")
         for site in self.main_app.sidebar.sites.keys():
             self.left_source_combo.addItem(f"🌐 {site}")
@@ -199,8 +381,16 @@ class SessionTab(QWidget):
         
         self.local_path_input = QLineEdit(self.main_app.local_home_path)
         self.local_path_input.returnPressed.connect(self.on_local_path_entered)
+
+        self.local_trash_btn = QToolButton()
+        self.local_trash_btn.setProperty("class", "nav-btn")
+        self.local_trash_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
+        self.local_trash_btn.setToolTip("Empty Local Trash")
+        self.local_trash_btn.clicked.connect(self.empty_local_trash)
+        
         local_nav.addWidget(self.local_back_btn); local_nav.addWidget(self.local_up_btn)
         local_nav.addWidget(self.local_home_btn); local_nav.addWidget(self.local_path_input)
+        local_nav.addWidget(self.local_trash_btn)
         local_layout.addLayout(local_nav)
 
         self.left_stack = QStackedWidget()
@@ -231,6 +421,7 @@ class SessionTab(QWidget):
 
         local_layout.addWidget(self.left_stack)
 
+        # --- REMOTE PANE ---
         remote_widget = QWidget()
         remote_layout = QVBoxLayout(remote_widget)
         remote_layout.setContentsMargins(0, 0, 0, 0)
@@ -250,12 +441,19 @@ class SessionTab(QWidget):
         
         self.remote_path_input = QLineEdit(); self.remote_path_input.setPlaceholderText("Connecting...")
         self.remote_path_input.returnPressed.connect(self.on_remote_path_entered)
-        self.remote_search_input = QLineEdit(); self.remote_search_input.setPlaceholderText("Filter..."); self.remote_search_input.setFixedWidth(130)
+        self.remote_search_input = QLineEdit(); self.remote_search_input.setPlaceholderText("Filter..."); self.remote_search_input.setFixedWidth(110)
         self.remote_search_input.textChanged.connect(self.filter_remote_files)
+
+        self.remote_trash_btn = QToolButton()
+        self.remote_trash_btn.setProperty("class", "nav-btn")
+        self.remote_trash_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon))
+        self.remote_trash_btn.setToolTip("Empty Remote Trash")
+        self.remote_trash_btn.clicked.connect(self.empty_remote_trash)
         
         remote_nav.addWidget(self.remote_back_btn); remote_nav.addWidget(self.remote_up_btn)
         remote_nav.addWidget(self.remote_home_btn)
         remote_nav.addWidget(self.remote_path_input); remote_nav.addWidget(self.remote_search_input)
+        remote_nav.addWidget(self.remote_trash_btn)
 
         self.remote_view = RemoteTreeView()
         self.remote_view.files_dropped.connect(self.on_files_dropped)
@@ -271,7 +469,8 @@ class SessionTab(QWidget):
         self.remote_view.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         
         rem_hdr = self.main_app.app_settings.get('remote_header')
-        if rem_hdr: self.remote_view.header().restoreState(QByteArray.fromHex(rem_hdr.encode('utf-8')))
+        if rem_hdr:
+            self.remote_view.header().restoreState(QByteArray.fromHex(rem_hdr.encode('utf-8')))
         
         self.remote_view.doubleClicked.connect(self.on_remote_double_click)
         self.remote_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -285,8 +484,8 @@ class SessionTab(QWidget):
         self.browser_splitter.addWidget(remote_widget)
         
         self.bottom_tabs = QTabWidget()
-        self.bottom_tabs.setMinimumHeight(200)
-
+        self.bottom_tabs.setMinimumHeight(140)
+        
         # 0. Transfer Queue
         queue_widget = QWidget()
         queue_layout = QVBoxLayout(queue_widget); queue_layout.setContentsMargins(0, 0, 0, 0)
@@ -319,19 +518,28 @@ class SessionTab(QWidget):
         term_input_layout = QHBoxLayout()
         term_prompt = QLabel("$ ")
         term_prompt.setStyleSheet('color: #38bdf8; font-weight: bold; font-family: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace;')
-        self.term_input = QLineEdit()
-        self.term_input.setStyleSheet('background-color: #18181b; color: #f4f4f5; font-family: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace; border-radius: 6px;')
+        
+        self.term_input = TerminalLineEdit()
+        self.term_input.setPlaceholderText("Type command... (Up/Down History, Tab Autocomplete)")
+        self.term_input.setStyleSheet('background-color: #18181b; color: #f4f4f5; font-family: "Cascadia Mono", "Consolas", "Ubuntu Mono", monospace; border-radius: 6px; padding: 4px 8px;')
         self.term_input.returnPressed.connect(self.send_terminal_cmd)
+        self.term_input.tab_pressed.connect(lambda: asyncio.create_task(self.autocomplete_terminal_input()))
+
         term_send_btn = QPushButton("Send")
         term_send_btn.clicked.connect(self.send_terminal_cmd)
+
+        term_cd_btn = QPushButton("📍 cd Active")
+        term_cd_btn.setToolTip("Jump terminal to current remote SFTP folder")
+        term_cd_btn.clicked.connect(self.cd_to_active_sftp_path)
         
         term_ctrl_c = QPushButton("Ctrl+C")
         term_ctrl_c.setStyleSheet("background-color: #ef4444; color: white;")
         term_ctrl_c.clicked.connect(self.send_terminal_ctrl_c)
 
         term_input_layout.addWidget(term_prompt)
-        term_input_layout.addWidget(self.term_input)
+        term_input_layout.addWidget(self.term_input, 1)
         term_input_layout.addWidget(term_send_btn)
+        term_input_layout.addWidget(term_cd_btn)
         term_input_layout.addWidget(term_ctrl_c)
         term_layout.addWidget(self.term_display)
         term_layout.addLayout(term_input_layout)
@@ -363,6 +571,7 @@ class SessionTab(QWidget):
         
         self.log_path_input = QComboBox()
         self.log_path_input.setEditable(True)
+        self.log_path_input.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.log_path_input.lineEdit().setPlaceholderText("Enter custom path or select preset...")
         self.log_path_input.addItems([
             "", "/var/log/syslog", "/var/log/auth.log", "/var/log/messages",
@@ -397,11 +606,11 @@ class SessionTab(QWidget):
         logs_layout.addWidget(self.log_display)
         self.bottom_tabs.addTab(logs_widget, "Live Logs")
 
-        # 4. Deep Remote Search Tab
+        # 4. Deep Search Tab
         self.deep_search_tab = DeepSearchWidget(self)
         self.bottom_tabs.addTab(self.deep_search_tab, "Deep Search")
 
-        # 5. Macros & Snippets Tab
+        # 5. Macros Tab
         self.macros_tab = MacroManagerWidget(self)
         self.bottom_tabs.addTab(self.macros_tab, "Macros & Snippets")
 
@@ -412,7 +621,7 @@ class SessionTab(QWidget):
         if main_spl_state: 
             self.main_splitter.restoreState(QByteArray.fromHex(main_spl_state.encode('utf-8')))
         else:
-            self.main_splitter.setSizes([450, 300])
+            self.main_splitter.setSizes([420, 260])
 
         browser_spl_state = self.main_app.app_settings.get('browser_splitter')
         if browser_spl_state: 
@@ -420,16 +629,148 @@ class SessionTab(QWidget):
 
         layout.addWidget(self.main_splitter)
 
+    # --- CHECKSUM HASHING ENGINE ---
+    def show_checksum_dialog(self, filename, md5_hash, sha256_hash):
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Checksums: {filename}")
+        dlg.resize(480, 180)
+        dlg.setStyleSheet("""
+            QDialog { background-color: #09090b; }
+            QLabel { color: #a1a1aa; font-weight: bold; font-family: 'Segoe UI', sans-serif; }
+            QLineEdit { background-color: #18181b; color: #4ade80; border: 1px solid #3f3f46; border-radius: 4px; padding: 6px; font-family: 'Cascadia Mono', monospace; font-size: 13px; }
+            QPushButton { background-color: #2563eb; color: white; padding: 6px 20px; border-radius: 4px; font-weight: bold; border: none; }
+            QPushButton:hover { background-color: #3b82f6; }
+        """)
+        layout = QVBoxLayout(dlg)
+        
+        layout.addWidget(QLabel("MD5:"))
+        md5_edit = QLineEdit(md5_hash)
+        md5_edit.setReadOnly(True)
+        layout.addWidget(md5_edit)
+        
+        layout.addSpacing(10)
+        
+        layout.addWidget(QLabel("SHA-256:"))
+        sha_edit = QLineEdit(sha256_hash)
+        sha_edit.setReadOnly(True)
+        layout.addWidget(sha_edit)
+        
+        layout.addStretch()
+        
+        btn_layout = QHBoxLayout()
+        btn_close = QPushButton("Close")
+        btn_close.clicked.connect(dlg.accept)
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_close)
+        layout.addLayout(btn_layout)
+        
+        dlg.exec()
+
+    def get_local_hashes(self, filepath):
+        md5_hash = hashlib.md5()
+        sha256_hash = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                md5_hash.update(byte_block)
+                sha256_hash.update(byte_block)
+        return md5_hash.hexdigest(), sha256_hash.hexdigest()
+
+    async def calculate_local_checksum(self, local_path):
+        self.status_changed.emit(f"Calculating hashes for {os.path.basename(local_path)}...")
+        try:
+            md5, sha256 = await asyncio.to_thread(self.get_local_hashes, local_path)
+            self.show_checksum_dialog(os.path.basename(local_path), md5, sha256)
+        except Exception as e:
+            QMessageBox.warning(self, "Checksum Error", str(e))
+        self.status_changed.emit("Ready")
+
+    async def calculate_remote_checksum(self, remote_path, side='right'):
+        self.status_changed.emit(f"Calculating hashes for {os.path.basename(remote_path)}...")
+        try:
+            conn = self.ssh_conn if side == 'right' else self.left_ssh_conn
+            if not conn: return
+            cmd = f"md5sum {shlex.quote(remote_path)} && sha256sum {shlex.quote(remote_path)}"
+            res = await conn.run(cmd)
+            if res.exit_status == 0:
+                lines = res.stdout.strip().splitlines()
+                md5 = lines[0].split()[0] if len(lines) > 0 else "Unknown"
+                sha256 = lines[1].split()[0] if len(lines) > 1 else "Unknown"
+                self.show_checksum_dialog(os.path.basename(remote_path), md5, sha256)
+            else:
+                QMessageBox.warning(self, "Checksum Error", f"Failed to calculate remote hashes:\n{res.stderr}")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
+        self.status_changed.emit("Ready")
+
+    # --- TERMINAL AUTOCOMPLETE & DIRECTORY SYNC ---
+    def cd_to_active_sftp_path(self):
+        if self.current_remote_path and self.current_remote_path != "." and self.term_process:
+            self.term_process.stdin.write(f"cd {shlex.quote(self.current_remote_path)}\n")
+            self.term_input.setFocus()
+
+    async def autocomplete_terminal_input(self):
+        text = self.term_input.text()
+        if not text: return
+        tokens = text.split(" ")
+        partial = tokens[-1]
+        is_first_token = len(tokens) == 1 and "/" not in partial
+
+        base_dir = self.current_remote_path if self.current_remote_path != "." else "~"
+        try:
+            conn, _ = await self.get_connection()
+            if is_first_token:
+                cmd = f"bash -c 'cd {shlex.quote(base_dir)} 2>/dev/null; compgen -c -- {shlex.quote(partial)} | head -n 40'"
+            else:
+                cmd = f"bash -c 'cd {shlex.quote(base_dir)} 2>/dev/null; compgen -f -- {shlex.quote(partial)} | while IFS= read -r f; do [ -d \"$f\" ] && echo \"$f/\" || echo \"$f\"; done | head -n 40'"
+            res = await conn.run(cmd)
+            matches = sorted(set(line.strip() for line in (res.stdout or "").splitlines() if line.strip()))
+            if not matches: return
+            if len(matches) == 1:
+                tokens[-1] = matches[0]
+                completed = " ".join(tokens)
+                if not matches[0].endswith("/"): completed += " "
+                self.term_input.setText(completed)
+                self.term_input.end(False)
+            else:
+                common = os.path.commonprefix(matches)
+                if len(common) > len(partial):
+                    tokens[-1] = common
+                    self.term_input.setText(" ".join(tokens))
+                    self.term_input.end(False)
+                else:
+                    self.term_display.appendPlainText("\n[Tab Matches]:  " + "   ".join(matches[:20]))
+                    self.term_display.moveCursor(QTextCursor.MoveOperation.End)
+        except Exception:
+            pass
+
+    # --- TRASH BIN LOGIC ---
+    def empty_local_trash(self):
+        trash_dir = os.path.expanduser("~/.nova_trash")
+        reply = QMessageBox.question(self, "Empty Trash", "Permanently delete all files in local Trash?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            if os.path.exists(trash_dir):
+                try:
+                    for item in os.listdir(trash_dir):
+                        item_path = os.path.join(trash_dir, item)
+                        if os.path.isdir(item_path): shutil.rmtree(item_path)
+                        else: os.remove(item_path)
+                    QMessageBox.information(self, "Trash Emptied", "Local trash has been emptied.")
+                except Exception as e:
+                    QMessageBox.warning(self, "Error", f"Could not empty trash: {e}")
+
+    def empty_remote_trash(self):
+        if QMessageBox.question(self, "Empty Trash", "Permanently delete all files in Remote Trash?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+            cmd = "rm -rf ~/.nova_trash/*"
+            asyncio.create_task(self.run_remote_command_async('exec', '', cmd))
+            QMessageBox.information(self, "Trash Emptied", "Remote trash clear command sent.")
+
     # --- Macro Execution Injection ---
     def execute_macro(self, script):
         if hasattr(self, 'term_process') and self.term_process:
             self.bottom_tabs.setCurrentIndex(1)
-            self.term_display.appendPlainText(f"\n\n--- Running Macro ---\n")
-            
+            self.term_display.appendPlainText("\n\n--- Running Task ---\n")
             cmd = script
-            if not cmd.endswith('\n'):
-                cmd += '\n'
-            
+            if not cmd.endswith('\n'): cmd += '\n'
             self.term_process.stdin.write(cmd)
         else:
             QMessageBox.warning(self, "Terminal Offline", "Interactive terminal is not connected.")
@@ -437,15 +778,28 @@ class SessionTab(QWidget):
     def launch_monitor(self):
         if not self.monitor_window:
             self.monitor_window = ServerMonitorWindow(self)
+        fit_window_to_screen(self.monitor_window, 1180, 780)
         self.monitor_window.show()
         self.monitor_window.activateWindow()
+
+    def launch_cron_manager(self):
+        if not self.cron_window:
+            self.cron_window = CronManagerWindow(self)
+        fit_window_to_screen(self.cron_window, 1050, 600)
+        self.cron_window.show()
+        self.cron_window.activateWindow()
+        
+    def launch_key_manager(self):
+        if not self.key_window:
+            self.key_window = SSHKeyManagerWindow(self)
+        fit_window_to_screen(self.key_window, 800, 500)
+        self.key_window.show()
+        self.key_window.activateWindow()
 
     def on_theme_changed(self, index):
         self.main_app.set_theme(index)
 
-    # ----------------------------------------------------
-    # SFTP BRIDGE (IN-MEMORY PROXY & RSYNC INJECTION)
-    # ----------------------------------------------------
+    # --- SFTP BRIDGE ---
     async def run_bridge_transfer(self, src_path, dst_path, direction, row_index):
         try:
             if direction == 'left_to_right':
@@ -486,15 +840,11 @@ class SessionTab(QWidget):
             await transfer_item(src_path, dst_path)
             self.transfer_complete(row_index, 'bridge')
             
-            if direction == 'left_to_right':
-                asyncio.create_task(self.load_remote_directory(self.current_remote_path, record_history=False))
-            else:
-                asyncio.create_task(self.load_left_remote_directory(self.current_left_remote_path, record_history=False))
+            if direction == 'left_to_right': asyncio.create_task(self.load_remote_directory(self.current_remote_path, record_history=False))
+            else: asyncio.create_task(self.load_left_remote_directory(self.current_left_remote_path, record_history=False))
                 
-        except asyncio.CancelledError:
-            self.transfer_error(row_index, "Cancelled")
-        except Exception as e:
-            self.transfer_error(row_index, str(e))
+        except asyncio.CancelledError: self.transfer_error(row_index, "Cancelled")
+        except Exception as e: self.transfer_error(row_index, str(e))
 
     def start_bridge_transfer(self, src_path, dst_path, direction):
         row = self.queue_model.rowCount()
@@ -549,14 +899,12 @@ class SessionTab(QWidget):
             process = await src_conn.create_process(cmd)
             while True:
                 data = await process.stdout.read(1024)
-                if not data:
-                    break
+                if not data: break
                 self.sync_log_view.insertPlainText(data.replace('\r', ''))
                 self.sync_log_view.moveCursor(QTextCursor.MoveOperation.End)
                 
             err = await process.stderr.read()
-            if err:
-                self.sync_log_view.appendPlainText(f"\n[rsync Error] {err}")
+            if err: self.sync_log_view.appendPlainText(f"\n[rsync Error] {err}")
                 
             self.sync_log_view.appendPlainText(f"\n[rsync] Transfer completed with exit status {process.exit_status}")
             
@@ -567,9 +915,7 @@ class SessionTab(QWidget):
         except Exception as e:
             self.sync_log_view.appendPlainText(f"\n[rsync Exception] {str(e)}")
 
-    # ----------------------------------------------------
-    # LEFT PANE CONNECTION METHODS
-    # ----------------------------------------------------
+    # --- LEFT PANE ---
     def on_left_source_changed(self, index):
         if index == 0:
             self.left_mode = 'local'
@@ -612,7 +958,8 @@ class SessionTab(QWidget):
 
     async def load_left_remote_directory(self, path, record_history=True):
         if not self.left_sftp_client: return
-        if path == '.': path = self.main_app.app_settings.get("remote_homes", {}).get(self.left_source_combo.currentText().replace("🌐 ", ""), '.')
+        if path == '.':
+            path = self.main_app.app_settings.get("remote_homes", {}).get(self.left_source_combo.currentText().replace("🌐 ", ""), '.')
         if record_history and self.current_left_remote_path != "." and self.current_left_remote_path != path:
             self.left_remote_history.append(self.current_left_remote_path)
             self.local_back_btn.setEnabled(True)
@@ -681,14 +1028,24 @@ class SessionTab(QWidget):
         
         source_index = self.left_proxy_model.mapToSource(proxy_index)
         item = self.left_remote_model.item(source_index.row(), 0)
+        data = item.data(Qt.ItemDataRole.UserRole)
         if item.text() == "..": return
         
         menu = QMenu()
+        checksum_action = None
+        if not data['is_dir']:
+            checksum_action = menu.addAction("🧮 Calculate Checksums (MD5/SHA256)")
+            menu.addSeparator()
+
         bridge_action = menu.addAction("🌉 Bridge Transfer to Right Pane (Memory Proxy)")
         rsync_action = menu.addAction("🚀 Direct Transfer to Right Pane (rsync)")
         
         action = menu.exec(self.left_remote_view.viewport().mapToGlobal(position))
-        if action == bridge_action:
+        
+        if action == checksum_action and item:
+            target_path = f"{self.current_left_remote_path.rstrip('/')}/{item.text()}"
+            asyncio.create_task(self.calculate_remote_checksum(target_path, side='left'))
+        elif action == bridge_action:
             src = f"{self.current_left_remote_path.rstrip('/')}/{item.text()}"
             dst = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
             self.start_bridge_transfer(src, dst, 'left_to_right')
@@ -697,13 +1054,11 @@ class SessionTab(QWidget):
             dst = self.current_remote_path.rstrip('/') + '/'
             asyncio.create_task(self.run_rsync_transfer(src, dst, 'left_to_right'))
 
-    # ----------------------------------------------------
-    # CORE ASYNC METHODS (Right Pane & Transfers)
-    # ----------------------------------------------------
-
+    # --- RIGHT PANE ---
     async def load_remote_directory(self, path, record_history=True):
         self.remote_search_input.clear()
-        if path == '.': path = self.main_app.app_settings.get("remote_homes", {}).get(self.host, '.')
+        if path == '.':
+            path = self.main_app.app_settings.get("remote_homes", {}).get(self.host, '.')
         if record_history and self.current_remote_path != "." and self.current_remote_path != path:
             self.remote_history.append(self.current_remote_path)
             self.remote_back_btn.setEnabled(True)
@@ -757,8 +1112,7 @@ class SessionTab(QWidget):
         except Exception as e:
             self.log_display.appendPlainText(f"\n[Log Tail Error: {e}]\n")
         finally:
-            if hasattr(self, 'log_process') and self.log_process:
-                self.log_process.terminate()
+            if hasattr(self, 'log_process') and self.log_process: self.log_process.terminate()
             self.on_log_stopped()
 
     async def run_transfer(self, local_path, remote_path, direction, row_index):
@@ -767,10 +1121,8 @@ class SessionTab(QWidget):
             
             def progress_cb(src, dst, transferred, total):
                 task = self.transfer_tasks.get(row_index)
-                if task and task.cancelled():
-                    raise asyncio.CancelledError()
-                if total > 0:
-                    self.update_progress(row_index, int((transferred / total) * 100))
+                if task and task.cancelled(): raise asyncio.CancelledError()
+                if total > 0: self.update_progress(row_index, int((transferred / total) * 100))
             
             if direction == 'upload':
                 if os.path.isdir(local_path):
@@ -781,7 +1133,7 @@ class SessionTab(QWidget):
                     try:
                         st = await sftp.stat(remote_path)
                         remote_size = st.size
-                    except: pass
+                    except Exception: pass
                     
                     if 0 < remote_size < local_size:
                         self.sync_log_view.appendPlainText(f"[Resume] Resuming upload: {os.path.basename(local_path)} (starting at {format_size(remote_size)})")
@@ -810,7 +1162,7 @@ class SessionTab(QWidget):
                     st = await sftp.stat(remote_path)
                     is_r_dir = stat.S_ISDIR(st.permissions)
                     remote_size = st.size
-                except: pass
+                except Exception: pass
                 
                 if is_r_dir:
                     await sftp.get(remote_path, local_path, recurse=True, progress_handler=progress_cb)
@@ -838,10 +1190,8 @@ class SessionTab(QWidget):
                         await sftp.get(remote_path, local_path, progress_handler=progress_cb)
             
             self.transfer_complete(row_index, direction)
-        except asyncio.CancelledError:
-            self.transfer_error(row_index, "Cancelled")
-        except Exception as e:
-            self.transfer_error(row_index, str(e))
+        except asyncio.CancelledError: self.transfer_error(row_index, "Cancelled")
+        except Exception as e: self.transfer_error(row_index, str(e))
 
     async def run_sync_scan(self, local_dir, remote_dir, direction):
         try:
@@ -942,16 +1292,32 @@ class SessionTab(QWidget):
     async def read_and_edit_file(self, filename, remote_path):
         try:
             content = await self.fetch_file_content(remote_path)
-            dialog = TextEditorDialog(filename, content, self)
-            if dialog.exec() == QDialog.DialogCode.Accepted:
-                await self.write_file_content(remote_path, dialog.get_content())
-                QMessageBox.information(self, "Success", "File saved.")
+            if not hasattr(self.main_app, 'editor_workspace') or not self.main_app.editor_workspace.isVisible():
+                from features.text_editor import TabbedEditorWorkspace
+                self.main_app.editor_workspace = TabbedEditorWorkspace()
+                fit_window_to_screen(self.main_app.editor_workspace, 1100, 740)
+                self.main_app.editor_workspace.show()
+            
+            self.main_app.editor_workspace.add_file_tab(self, remote_path, content, is_local=False)
+            self.main_app.editor_workspace.activateWindow()
         except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to load or save file: {str(e)}")
+            QMessageBox.warning(self, "Error", f"Failed to load file: {str(e)}")
 
-    # ----------------------------------------------------
-    # UI CONTROLLERS & EVENT ROUTING
-    # ----------------------------------------------------
+    def read_and_edit_local_file(self, filepath):
+        try:
+            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+                
+            if not hasattr(self.main_app, 'editor_workspace') or not self.main_app.editor_workspace.isVisible():
+                from features.text_editor import TabbedEditorWorkspace
+                self.main_app.editor_workspace = TabbedEditorWorkspace()
+                fit_window_to_screen(self.main_app.editor_workspace, 1100, 740)
+                self.main_app.editor_workspace.show()
+            
+            self.main_app.editor_workspace.add_file_tab(self, filepath, content, is_local=True)
+            self.main_app.editor_workspace.activateWindow()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to load local file: {str(e)}")
 
     def open_sync_dialog(self):
         local = self.local_path_input.text()
@@ -1038,31 +1404,20 @@ class SessionTab(QWidget):
         layout.addWidget(text_edit)
         preview_dialog.exec()
 
-    def launch_monitor(self):
-        if not self.monitor_window:
-            self.monitor_window = ServerMonitorWindow(self)
-        self.monitor_window.show()
-        self.monitor_window.activateWindow()
-
     def start_log_tail(self):
         path = self.log_path_input.currentText().strip()
         if not path: return
-        
         if not path.startswith("tail") and not path.startswith("docker") and not path.startswith("journalctl"):
             cmd = f"tail -f {path}"
-        else:
-            cmd = path
-
+        else: cmd = path
         self.btn_start_log.setEnabled(False)
         self.btn_stop_log.setEnabled(True)
         self.log_display.appendPlainText(f"--- Starting: {cmd} ---\n")
-        
         asyncio.create_task(self.run_log_tail(cmd))
 
     def stop_log_tail(self):
         self.log_running = False
-        if hasattr(self, 'log_process') and self.log_process:
-            self.log_process.terminate()
+        if hasattr(self, 'log_process') and self.log_process: self.log_process.terminate()
 
     def on_log_data(self, text):
         text = text.replace('\r\n', '\n')
@@ -1086,28 +1441,24 @@ class SessionTab(QWidget):
             if char == '\r':
                 cursor.movePosition(QTextCursor.MoveOperation.StartOfLine, QTextCursor.MoveMode.KeepAnchor)
                 cursor.removeSelectedText()
-            elif char == '\b' or char == '\x08':
-                cursor.deletePreviousChar()
-            else:
-                cursor.insertText(char)
+            elif char == '\b' or char == '\x08': cursor.deletePreviousChar()
+            else: cursor.insertText(char)
         self.term_display.setTextCursor(cursor)
 
     def send_terminal_cmd(self):
         cmd = self.term_input.text()
         if hasattr(self, 'term_process') and self.term_process:
+            self.term_input.record_command(cmd)
             self.term_process.stdin.write(cmd + '\n')
             self.term_input.clear()
 
     def send_terminal_ctrl_c(self):
-        if hasattr(self, 'term_process') and self.term_process:
-            self.term_process.stdin.write('\x03')
+        if hasattr(self, 'term_process') and self.term_process: self.term_process.stdin.write('\x03')
 
     def update_queue_badge(self):
         active = sum(1 for task in self.transfer_tasks.values() if task and not task.done())
-        if active > 0:
-            self.bottom_tabs.setTabText(0, f"Transfer Queue ({active})")
-        else:
-            self.bottom_tabs.setTabText(0, "Transfer Queue")
+        if active > 0: self.bottom_tabs.setTabText(0, f"Transfer Queue ({active})")
+        else: self.bottom_tabs.setTabText(0, "Transfer Queue")
 
     def abort_sync(self):
         self.sync_running = False
@@ -1117,20 +1468,14 @@ class SessionTab(QWidget):
         index = self.queue_table.indexAt(position)
         if not index.isValid(): return
         row = index.row()
-        
         status_item = self.queue_model.item(row, 2)
-        if status_item and (status_item.text() in ["Done", "Cancelled"] or status_item.text().startswith("Failed")):
-            return
-            
+        if status_item and (status_item.text() in ["Done", "Cancelled"] or status_item.text().startswith("Failed")): return
         menu = QMenu()
         cancel_action = menu.addAction("Cancel Transfer")
         action = menu.exec(self.queue_table.viewport().mapToGlobal(position))
-        if not action: return
-        
         if action == cancel_action:
             task = self.transfer_tasks.get(row)
-            if task and not task.done():
-                task.cancel()
+            if task and not task.done(): task.cancel()
             status_item.setText("Cancelling...")
             status_item.setForeground(QColor("#ef4444"))
 
@@ -1150,17 +1495,13 @@ class SessionTab(QWidget):
         self.queue_model.setItem(row, 0, QStandardItem(dir_icon))
         self.queue_model.item(row, 0).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.queue_model.setItem(row, 1, QStandardItem(os.path.basename(local_path)))
-        
         status_item = QStandardItem("Transferring...")
         status_item.setForeground(QColor("#0ea5e9")) 
         self.queue_model.setItem(row, 2, status_item)
-        
         pb = QProgressBar(); pb.setValue(0)
         self.queue_table.setIndexWidget(self.queue_model.index(row, 3), pb)
-
         task = asyncio.create_task(self.run_transfer(local_path, remote_path, direction, row))
         self.transfer_tasks[row] = task
-        
         self.update_queue_badge()
         self.bottom_tabs.setCurrentIndex(0)
 
@@ -1172,14 +1513,9 @@ class SessionTab(QWidget):
         status_item = self.queue_model.item(row, 2)
         status_item.setText("Done")
         status_item.setForeground(QColor("#10b981")) 
-        
         pb = self.queue_table.indexWidget(self.queue_model.index(row, 3))
         if pb: pb.setValue(100)
-        if direction == "upload":
-            asyncio.create_task(self.load_remote_directory(self.current_remote_path, record_history=False))
-        elif direction == 'bridge':
-            pass 
-            
+        if direction == "upload": asyncio.create_task(self.load_remote_directory(self.current_remote_path, record_history=False))
         self.update_queue_badge()
 
     def transfer_error(self, row, error_msg):
@@ -1187,8 +1523,7 @@ class SessionTab(QWidget):
         if status_item.text() != "Cancelling...":
             status_item.setText(f"Failed: {error_msg}")
             status_item.setForeground(QColor("#ef4444")) 
-        else:
-            status_item.setText("Cancelled")
+        else: status_item.setText("Cancelled")
         self.update_queue_badge()
 
     def set_local_path(self, target_path, record_history=True):
@@ -1200,7 +1535,6 @@ class SessionTab(QWidget):
             self.local_view.setRootIndex(self.local_model.index(""))
             self.local_path_input.setText("")
             return
-
         target_path = os.path.normpath(target_path)
         if not os.path.exists(target_path): return
         curr = self.local_path_input.text()
@@ -1209,10 +1543,6 @@ class SessionTab(QWidget):
             self.local_back_btn.setEnabled(True)
         self.local_view.setRootIndex(self.local_model.index(target_path))
         self.local_path_input.setText(target_path)
-
-    # ----------------------------------------------------
-    # DUAL-MODE NAVIGATION
-    # ----------------------------------------------------
 
     def go_local_back(self):
         if self.left_mode == 'local':
@@ -1231,29 +1561,26 @@ class SessionTab(QWidget):
             curr = self.local_path_input.text().strip()
             if not curr: return
             qdir = QDir(curr)
-            if qdir.cdUp():
-                self.set_local_path(os.path.normpath(qdir.absolutePath()))
-            elif sys.platform == "win32":
-                self.set_local_path("")
+            if qdir.cdUp(): self.set_local_path(os.path.normpath(qdir.absolutePath()))
+            elif sys.platform == "win32": self.set_local_path("")
         else:
             if self.current_left_remote_path not in [".", "/"]:
                 parent = "/".join(self.current_left_remote_path.rstrip('/').split('/')[:-1]) or "/"
                 asyncio.create_task(self.load_left_remote_directory(parent))
 
     def go_local_home(self):
-        if self.left_mode == 'local':
-            self.set_local_path(self.main_app.local_home_path)
-        else:
-            asyncio.create_task(self.load_left_remote_directory('.'))
+        if self.left_mode == 'local': self.set_local_path(self.main_app.local_home_path)
+        else: asyncio.create_task(self.load_left_remote_directory('.'))
 
     def on_local_path_entered(self):
-        if self.left_mode == 'local':
-            self.set_local_path(self.local_path_input.text().strip())
-        else:
-            asyncio.create_task(self.load_left_remote_directory(self.local_path_input.text().strip()))
+        if self.left_mode == 'local': self.set_local_path(self.local_path_input.text().strip())
+        else: asyncio.create_task(self.load_left_remote_directory(self.local_path_input.text().strip()))
 
     def on_local_double_click(self, index):
         if self.local_model.isDir(index): self.set_local_path(self.local_model.filePath(index))
+        else:
+            filepath = self.local_model.filePath(index)
+            self.read_and_edit_local_file(filepath)
 
     def go_remote_back(self):
         if self.remote_history:
@@ -1277,31 +1604,22 @@ class SessionTab(QWidget):
         self.current_remote_path = current_path
         self.remote_model.removeRows(0, self.remote_model.rowCount())
         self.remote_path_input.setText(current_path)
-
         if current_path != '/':
             up_item = QStandardItem("..")
             up_item.setIcon(self.dir_icon)
             up_item.setData({'is_dir': True, 'mode': 0, 'uid': 0, 'gid': 0}, Qt.ItemDataRole.UserRole)
             self.remote_model.appendRow([up_item, QStandardItem(""), QStandardItem(""), QStandardItem("")])
-
         for f in file_list:
             name_item = QStandardItem(f['name'])
             name_item.setIcon(get_colored_icon(self.style(), f['name'], f['is_dir']))
             name_item.setData({'is_dir': f['is_dir'], 'mode': f['mode'], 'uid': f['uid'], 'gid': f['gid']}, Qt.ItemDataRole.UserRole)
-            
             size_str = "" if f['is_dir'] else format_size(f['size'])
-            size_item = QStandardItem(size_str)
-            size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            
+            size_item = QStandardItem(size_str); size_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             date_str = format_date(f['mtime'])
-            date_item = QStandardItem(date_str)
-            date_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            
+            date_item = QStandardItem(date_str); date_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             mode_str = stat.filemode(f['mode'])
             mode_item = QStandardItem(mode_str)
-            
             self.remote_model.appendRow([name_item, size_item, date_item, mode_item])
-
         self.status_changed.emit(f"Connected: {current_path}")
 
     def on_remote_double_click(self, proxy_index):
@@ -1319,28 +1637,43 @@ class SessionTab(QWidget):
 
     def on_local_context_menu(self, position):
         index = self.local_view.indexAt(position)
-        if not index.isValid(): return
-        file_path = self.local_model.filePath(index)
-        is_dir = os.path.isdir(file_path)
-        
         menu = QMenu()
-        upload_action = menu.addAction(f"Upload {'Folder' if is_dir else 'File'}")
-        
-        set_home_action = None
-        if is_dir:
-            menu.addSeparator()
-            set_home_action = menu.addAction("Set as Default Local Home")
-            
+        upload_action, set_home_action, delete_action, checksum_action = None, None, None, None
+        file_path = None
+        if index.isValid():
+            file_path = self.local_model.filePath(index)
+            is_dir = os.path.isdir(file_path)
+            upload_action = menu.addAction(f"Upload {'Folder' if is_dir else 'File'}")
+            delete_action = menu.addAction("Move to Trash (Safe Delete)")
+            if not is_dir:
+                menu.addSeparator()
+                checksum_action = menu.addAction("🧮 Calculate Checksums (MD5/SHA256)")
+            if is_dir:
+                menu.addSeparator()
+                set_home_action = menu.addAction("Set as Default Local Home")
+        menu.addSeparator()
+        empty_trash_action = menu.addAction("🗑️ Empty Local Trash")
         action = menu.exec(self.local_view.viewport().mapToGlobal(position))
         if not action: return
         
-        if action == upload_action and self.current_remote_path != ".":
+        if action == upload_action and file_path and self.current_remote_path != ".":
             self.start_transfer(file_path, f"{self.current_remote_path.rstrip('/')}/{os.path.basename(file_path)}", "upload")
-        elif action == set_home_action:
+        elif action == delete_action and file_path:
+            reply = QMessageBox.question(self, "Safe Delete", f"Move '{os.path.basename(file_path)}' to local Trash?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply == QMessageBox.StandardButton.Yes:
+                trash_dir = os.path.expanduser("~/.nova_trash")
+                os.makedirs(trash_dir, exist_ok=True)
+                safe_name = f"{os.path.basename(file_path)}_{int(time.time())}"
+                try: shutil.move(file_path, os.path.join(trash_dir, safe_name))
+                except Exception as e: QMessageBox.warning(self, "Error", f"Failed to move to trash: {e}")
+        elif action == checksum_action and file_path:
+            asyncio.create_task(self.calculate_local_checksum(file_path))
+        elif action == set_home_action and file_path:
             self.main_app.local_home_path = file_path
             self.main_app.app_settings["local_home"] = file_path
             self.main_app.save_settings()
             QMessageBox.information(self, "Home Set", f"Local home directory set to:\n{file_path}")
+        elif action == empty_trash_action: self.empty_local_trash()
 
     def on_files_dropped(self, paths):
         if self.current_remote_path == ".": return
@@ -1351,60 +1684,70 @@ class SessionTab(QWidget):
         if self.current_remote_path == ".": return
         proxy_index = self.remote_view.indexAt(position)
         menu = QMenu()
+        
+        compose_action = None
         new_folder_action = menu.addAction("New Folder")
-        download_action, rename_action, delete_action, prop_action, set_home_action = None, None, None, None, None
+        download_action, rename_action, delete_action, prop_action, set_home_action, checksum_action = None, None, None, None, None, None
         tar_action, untar_action, zip_action, unzip_action = None, None, None, None
         bridge_action, rsync_action = None, None
         item, data = None, None
-
+        
         if proxy_index.isValid():
             source_index = self.proxy_model.mapToSource(proxy_index)
             item = self.remote_model.item(source_index.row(), 0)
             data = item.data(Qt.ItemDataRole.UserRole)
             if item.text() != "..":
                 menu.addSeparator()
-                download_action = menu.addAction(f"Download {'Folder' if data['is_dir'] else 'File'}")
                 
+                # Check for Docker Compose file
+                if not data['is_dir'] and item.text().lower() in ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml']:
+                    compose_action = menu.addAction("🐳 Manage Docker Compose Stack")
+                    menu.addSeparator()
+
+                download_action = menu.addAction(f"Download {'Folder' if data['is_dir'] else 'File'}")
+                if not data['is_dir']:
+                    checksum_action = menu.addAction("🧮 Calculate Checksums (MD5/SHA256)")
                 if self.left_mode == 'remote':
                     bridge_action = menu.addAction("🌉 Bridge Transfer to Left Pane (Memory Proxy)")
                     rsync_action = menu.addAction("🚀 Direct Transfer to Left Pane (rsync)")
-                    
                 rename_action = menu.addAction("Rename")
-                
                 custom_menu = menu.addMenu("Custom Commands")
                 if data['is_dir']:
                     tar_action = custom_menu.addAction("Tar (Compress to .tar.gz)")
                     zip_action = custom_menu.addAction("Zip (Compress to .zip)")
                 else:
                     ext = item.text().lower()
-                    if ext.endswith(('.tar.gz', '.tar', '.tgz')):
-                        untar_action = custom_menu.addAction("Untar (Extract .tar.gz)")
-                    if ext.endswith('.zip'):
-                        unzip_action = custom_menu.addAction("Unzip (Extract .zip)")
-                if custom_menu.isEmpty():
-                    custom_menu.setEnabled(False)
-                
+                    if ext.endswith(('.tar.gz', '.tar', '.tgz')): untar_action = custom_menu.addAction("Untar (Extract .tar.gz)")
+                    if ext.endswith('.zip'): unzip_action = custom_menu.addAction("Unzip (Extract .zip)")
+                if custom_menu.isEmpty(): custom_menu.setEnabled(False)
                 menu.addSeparator()
                 prop_action = menu.addAction("Properties (chmod / chown)")
-                delete_action = menu.addAction("Delete")
+                delete_action = menu.addAction("Move to Trash (Safe Delete)")
                 if data['is_dir']:
                     menu.addSeparator()
                     set_home_action = menu.addAction("Set as Default Remote Home")
-
+        menu.addSeparator()
+        empty_trash_action = menu.addAction("🗑️ Empty Remote Trash")
+        
         action = menu.exec(self.remote_view.viewport().mapToGlobal(position))
         if not action: return
         
-        if action == new_folder_action:
+        if action == compose_action and item:
+            target_path = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
+            dlg = DockerComposeManagerDialog(self, target_path, self.current_remote_path)
+            dlg.show()
+        elif action == new_folder_action:
             name, ok = QInputDialog.getText(self, "New Folder", "Enter folder name:")
-            if ok and name: 
-                asyncio.create_task(self.run_remote_command_async('mkdir', f"{self.current_remote_path.rstrip('/')}/{name}"))
+            if ok and name: asyncio.create_task(self.run_remote_command_async('mkdir', f"{self.current_remote_path.rstrip('/')}/{name}"))
         elif action == download_action and item:
             if self.left_mode == 'local':
                 local_idx = self.local_view.currentIndex()
                 local_dir = self.local_model.filePath(local_idx) if local_idx.isValid() else QDir.homePath()
-                if not local_dir or not os.path.isdir(local_dir):
-                    local_dir = os.path.dirname(local_dir) if local_dir else QDir.homePath()
+                if not local_dir or not os.path.isdir(local_dir): local_dir = os.path.dirname(local_dir) if local_dir else QDir.homePath()
                 self.start_transfer(os.path.join(local_dir, item.text()), f"{self.current_remote_path.rstrip('/')}/{item.text()}", "download")
+        elif action == checksum_action and item:
+            target_path = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
+            asyncio.create_task(self.calculate_remote_checksum(target_path, side='right'))
         elif action == bridge_action and item:
             src = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
             dst = f"{self.current_left_remote_path.rstrip('/')}/{item.text()}"
@@ -1418,15 +1761,16 @@ class SessionTab(QWidget):
             if ok and new_name and new_name != item.text():
                 asyncio.create_task(self.run_remote_command_async('rename', f"{self.current_remote_path.rstrip('/')}/{item.text()}", f"{self.current_remote_path.rstrip('/')}/{new_name}"))
         elif action == delete_action and item:
-            if QMessageBox.question(self, "Delete", f"Delete {item.text()}?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
-                cmd = 'rmdir' if data['is_dir'] else 'rm'
-                asyncio.create_task(self.run_remote_command_async(cmd, f"{self.current_remote_path.rstrip('/')}/{item.text()}"))
+            if QMessageBox.question(self, "Safe Delete", f"Move '{item.text()}' to Remote Trash?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
+                target_path = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
+                safe_name = f"{item.text()}_{int(time.time())}"
+                cmd = f"mkdir -p ~/.nova_trash && mv \"{target_path}\" ~/.nova_trash/\"{safe_name}\""
+                asyncio.create_task(self.run_remote_command_async('exec', '', cmd))
         elif action == prop_action and item:
             dialog = PropertiesDialog(item.text(), data['mode'], data['uid'], data['gid'], data['is_dir'], self)
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 new_mode, new_uid, new_gid, is_recursive = dialog.get_properties()
                 target_path = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
-                
                 if is_recursive:
                     cmds = []
                     if new_mode is not None:
@@ -1438,19 +1782,14 @@ class SessionTab(QWidget):
                         chown_str = f"{u}:{g}" if g else f"{u}"
                         if not u and g: chown_str = f":{g}"
                         cmds.append(f"chown -R {chown_str} \"{target_path}\"")
-                    
-                    if cmds:
-                        asyncio.create_task(self.run_remote_command_async('exec', '', " && ".join(cmds)))
-                else:
-                    asyncio.create_task(self.run_remote_command_async('properties', target_path, (new_mode, new_uid, new_gid)))
+                    if cmds: asyncio.create_task(self.run_remote_command_async('exec', '', " && ".join(cmds)))
+                else: asyncio.create_task(self.run_remote_command_async('properties', target_path, (new_mode, new_uid, new_gid)))
         elif action == set_home_action and item:
             target_path = f"{self.current_remote_path.rstrip('/')}/{item.text()}"
-            if "remote_homes" not in self.main_app.app_settings:
-                self.main_app.app_settings["remote_homes"] = {}
+            if "remote_homes" not in self.main_app.app_settings: self.main_app.app_settings["remote_homes"] = {}
             self.main_app.app_settings["remote_homes"][self.host] = target_path
             self.main_app.save_settings()
             QMessageBox.information(self, "Home Set", f"Remote home directory for '{self.host}' set to:\n{target_path}")
-            
         elif action == tar_action and item:
             cmd = f"cd \"{self.current_remote_path}\" && tar -czvf \"{item.text()}.tar.gz\" \"{item.text()}\""
             asyncio.create_task(self.run_remote_command_async('exec', '', cmd))
@@ -1463,25 +1802,24 @@ class SessionTab(QWidget):
         elif action == unzip_action and item:
             cmd = f"cd \"{self.current_remote_path}\" && unzip -o \"{item.text()}\""
             asyncio.create_task(self.run_remote_command_async('exec', '', cmd))
+        elif action == empty_trash_action: self.empty_remote_trash()
 
     def close_tab_resources(self):
-        if getattr(self, 'deep_search_tab', None):
-            self.deep_search_tab.stop_search()
+        if getattr(self, 'deep_search_tab', None): self.deep_search_tab.stop_search()
         if getattr(self, 'monitor_window', None):
             self.monitor_window.is_polling = False
             self.monitor_window.close()
+        if getattr(self, 'cron_window', None): self.cron_window.close()
+        if getattr(self, 'key_window', None): self.key_window.close()
         if getattr(self, 'live_sync_observer', None):
             self.live_sync_observer.stop()
             self.live_sync_observer.join()
         self.log_running = False
         if getattr(self, 'log_process', None): self.log_process.terminate()
         if getattr(self, 'term_process', None): self.term_process.terminate()
-        
         self.cancel_all_transfers()
         self.abort_sync()
-        
         if getattr(self, 'sftp_client', None): self.sftp_client.exit()
         if getattr(self, 'ssh_conn', None): self.ssh_conn.close()
-        
         if getattr(self, 'left_sftp_client', None): self.left_sftp_client.exit()
         if getattr(self, 'left_ssh_conn', None): self.left_ssh_conn.close()

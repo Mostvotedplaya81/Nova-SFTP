@@ -1,3 +1,19 @@
+nova-sftp (1.6.0-1) jammy; urgency=medium
+
+  * Flagship Release: Transformed application into a complete Remote Infrastructure Suite.
+  * Added "Command Center" with Live Fleet Matrix, async resource polling, and desktop threshold alerts.
+  * Added Visual Docker Manager to restart containers, tail logs, and manage Docker Compose stacks.
+  * Added Multi-Tab Code Workspace with dynamic IDE themes (Dracula/Monokai), strict syntax highlighting, and Find/Replace.
+  * Added Visual Cron Task Scheduler to edit, pause, and run crontab entries.
+  * Added SSH Key Vault & Deployer (Visual ssh-copy-id) with local Ed25519 generation.
+  * Added APT Updates & Let's Encrypt SSL Expiry Monitor.
+  * Added Checksum Verifier (MD5/SHA256) to local and remote context menus.
+  * Added Terminal upgrades: Up/Down command history and remote Tab-completion.
+  * Added Disaster Recovery: 1-Click directory snapshots and Rclone backup runner.
+  * Added Visual SSH Tunnels for secure 1-click port forwarding (MariaDB, Portainer, etc.).
+
+ -- Nicky <streamit.litenova.me@gmail.com>  Sat, 24 Oct 2026 10:31:00 +0100
+
 nova-sftp (1.5.0-4) jammy; urgency=medium
 
   * Feature: Automated Macros & Snippets for saving and running multi-step deployment scripts.
